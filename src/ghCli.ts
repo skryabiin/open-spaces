@@ -321,6 +321,16 @@ export async function getCodespace(codespaceName: string): Promise<Codespace | n
 }
 
 /**
+ * Deletes a codespace.
+ * @param codespaceName - The name of the codespace to delete
+ * @throws {GhCliError} If the codespace name is invalid or command fails
+ */
+export async function deleteCodespace(codespaceName: string): Promise<void> {
+  validateCodespaceName(codespaceName);
+  await runGh(['api', '-X', 'DELETE', `/user/codespaces/${codespaceName}`], 60000);
+}
+
+/**
  * Waits for a codespace to reach a target state.
  * @param codespaceName - The name of the codespace
  * @param targetState - The state to wait for

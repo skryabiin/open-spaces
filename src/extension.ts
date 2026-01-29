@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { CodespaceTreeProvider } from './ui/codespaceTreeProvider';
 import { CodespaceTreeItem } from './ui/treeItems';
 import * as codespaceManager from './codespaceManager';
+import * as ghCli from './ghCli';
 
 let treeProvider: CodespaceTreeProvider;
 let outputChannel: vscode.OutputChannel;
@@ -43,6 +44,33 @@ export function activate(context: vscode.ExtensionContext) {
 
   log('Open Spaces extension activating');
 
+  // Check for open-remote-ssh extension
+  const remoteSshExtension = vscode.extensions.getExtension('jeanp413.open-remote-ssh');
+  if (!remoteSshExtension) {
+    void vscode.window.showWarningMessage(
+      'Open Remote - SSH extension is required to connect to codespaces.',
+      'Install Extension'
+    ).then(selection => {
+      if (selection === 'Install Extension') {
+        void vscode.env.openExternal(vscode.Uri.parse('vscode:extension/jeanp413.open-remote-ssh'));
+      }
+    });
+  }
+
+  // Check for gh CLI
+  void ghCli.checkInstalled().then(installed => {
+    if (!installed) {
+      void vscode.window.showErrorMessage(
+        'GitHub CLI (gh) is not installed. Install it to use this extension.',
+        'Get GitHub CLI'
+      ).then(selection => {
+        if (selection === 'Get GitHub CLI') {
+          void vscode.env.openExternal(vscode.Uri.parse('https://cli.github.com/'));
+        }
+      });
+    }
+  });
+
   // Check if we're inside a codespace and set context
   const insideCodespace = isInsideCodespace();
   void vscode.commands.executeCommand('setContext', 'openSpaces.insideCodespace', insideCodespace);
@@ -58,6 +86,14 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(treeView);
   context.subscriptions.push(treeProvider);
+
+  // Track tree view visibility for proactive refresh
+  context.subscriptions.push(
+    treeView.onDidChangeVisibility((e) => {
+      treeProvider.setVisible(e.visible);
+    })
+  );
+  treeProvider.setVisible(treeView.visible);
 
   // Register commands
   context.subscriptions.push(
@@ -157,6 +193,24 @@ export function activate(context: vscode.ExtensionContext) {
         const err = error instanceof Error ? error : new Error(String(error));
         log(`Failed to full rebuild codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.delete', async (item?: CodespaceTreeItem) => {
+      if (!item?.codespace) {
+        void vscode.window.showErrorMessage('No codespace selected');
+        return;
+      }
+
+      try {
+        await codespaceManager.deleteCodespace(item.codespace);
+        treeProvider.refresh();
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        log(`Failed to delete codespace ${item.codespace.name}`, err);
+        void vscode.window.showErrorMessage(`Failed to delete codespace: ${err.message}`);
       }
     })
   );

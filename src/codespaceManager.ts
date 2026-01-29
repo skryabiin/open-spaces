@@ -51,16 +51,44 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
  * @throws {Error} If connection fails or codespace has no repository
  */
 export async function connect(codespace: Codespace): Promise<void> {
-  // If codespace is shutdown, start it first
-  if (codespace.state === 'Shutdown') {
+  // Fetch fresh codespace state before connecting
+  const freshCodespace = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Checking codespace status...`,
+      cancellable: false,
+    },
+    async () => {
+      return await ghCli.getCodespace(codespace.name);
+    }
+  );
+
+  if (!freshCodespace) {
+    throw new Error(`Codespace ${codespace.displayName} no longer exists`);
+  }
+
+  if (freshCodespace.state === 'Failed') {
+    throw new Error(`Codespace ${codespace.displayName} is in a failed state. Please rebuild it.`);
+  }
+
+  // Handle non-available states
+  if (freshCodespace.state !== 'Available') {
+    const transitionalStates = ['Starting', 'Provisioning', 'Rebuilding', 'Updating'];
+    const isTransitional = transitionalStates.includes(freshCodespace.state);
+
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Starting codespace ${codespace.displayName}...`,
+        title: isTransitional
+          ? `Waiting for codespace ${codespace.displayName}...`
+          : `Starting codespace ${codespace.displayName}...`,
         cancellable: false,
       },
       async () => {
-        await ghCli.startCodespace(codespace.name);
+        // Only start if it's shutdown, not if it's already transitioning
+        if (freshCodespace.state === 'Shutdown') {
+          await ghCli.startCodespace(codespace.name);
+        }
         await ghCli.waitForState(codespace.name, 'Available');
       }
     );
@@ -221,4 +249,33 @@ export async function rebuild(codespace: Codespace, full = false): Promise<void>
   void vscode.window.showInformationMessage(
     `Codespace ${codespace.displayName} rebuild initiated. It will be available once the rebuild completes.`
   );
+}
+
+/**
+ * Deletes a codespace.
+ * @param codespace - The codespace to delete
+ */
+export async function deleteCodespace(codespace: Codespace): Promise<void> {
+  const confirmed = await vscode.window.showWarningMessage(
+    `Are you sure you want to delete ${codespace.displayName}? This action cannot be undone and any unsaved changes will be lost.`,
+    { modal: true },
+    'Delete'
+  );
+
+  if (confirmed !== 'Delete') {
+    return;
+  }
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Deleting codespace ${codespace.displayName}...`,
+      cancellable: false,
+    },
+    async () => {
+      await ghCli.deleteCodespace(codespace.name);
+    }
+  );
+
+  void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} deleted`);
 }

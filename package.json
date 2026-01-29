@@ -20,6 +20,10 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "extensionKind": ["ui", "workspace"],
+  "activationEvents": [
+    "onView:openSpaces.codespaceTree"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -78,6 +82,11 @@
         "command": "openSpaces.disconnect",
         "title": "Disconnect from Codespace",
         "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "openSpaces.delete",
+        "title": "Delete Codespace",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -128,6 +137,11 @@
           "command": "openSpaces.rebuildFull",
           "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/",
           "group": "rebuild@2"
+        },
+        {
+          "command": "openSpaces.delete",
+          "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/",
+          "group": "danger"
         }
       ]
     }
