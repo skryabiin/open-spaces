@@ -20,7 +20,9 @@ Potential features to add to the extension.
 
 - [ ] **Auto-Stop Timer** - Show remaining idle timeout and allow users to extend it, or configure auto-stop behavior to save billing.
 
-- [ ] **Machine Type Display & Upgrade** - Show current machine specs (cores, RAM) in the detail view. Allow changing machine type for stopped codespaces.
+- [x] **Machine Type Display** - Show current machine specs (cores, RAM, storage) in the detail view.
+
+- [ ] **Machine Type Upgrade** - Allow changing machine type for stopped codespaces.
 
 - [ ] **Codespace Rename** - Allow renaming codespaces to more meaningful display names.
 

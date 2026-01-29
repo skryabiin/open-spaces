@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Codespace, CodespaceState } from '../types';
+import { Codespace, CodespaceState, MachineInfo } from '../types';
 
 function getStateIcon(state: CodespaceState): vscode.ThemeIcon {
   switch (state) {
@@ -85,7 +85,14 @@ export class CodespaceTreeItem extends vscode.TreeItem {
     md.appendMarkdown(`- Repository: ${this.codespace.repository}\n`);
     md.appendMarkdown(`- Branch: ${this.codespace.branch || 'N/A'}\n`);
     md.appendMarkdown(`- State: ${this.codespace.state}\n`);
-    md.appendMarkdown(`- Machine: ${this.codespace.machineName || 'N/A'}\n`);
+    if (this.codespace.machineInfo) {
+      md.appendMarkdown(`- Machine: ${formatMachineSpecs(this.codespace.machineInfo)}\n`);
+      if (this.codespace.machineInfo.storageInBytes > 0) {
+        md.appendMarkdown(`- Storage: ${formatBytes(this.codespace.machineInfo.storageInBytes)}\n`);
+      }
+    } else {
+      md.appendMarkdown(`- Machine: ${this.codespace.machineName || 'N/A'}\n`);
+    }
     if (this.codespace.lastUsedAt) {
       const lastUsed = new Date(this.codespace.lastUsedAt);
       md.appendMarkdown(`- Last used: ${lastUsed.toLocaleString()}\n`);
@@ -143,9 +150,25 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       }
     }
 
-    children.push(
-      new CodespaceDetailItem('server-environment', this.codespace.machineName || 'Unknown', 'machine')
-    );
+    // Display machine specs if available, otherwise fall back to machine name
+    if (this.codespace.machineInfo) {
+      const specs = formatMachineSpecs(this.codespace.machineInfo);
+      children.push(new CodespaceDetailItem('server-environment', specs, 'machine'));
+      // Show storage as a separate detail if available
+      if (this.codespace.machineInfo.storageInBytes > 0) {
+        children.push(
+          new CodespaceDetailItem(
+            'database',
+            `${formatBytes(this.codespace.machineInfo.storageInBytes)} storage`,
+            'storage'
+          )
+        );
+      }
+    } else {
+      children.push(
+        new CodespaceDetailItem('server-environment', this.codespace.machineName || 'Unknown', 'machine')
+      );
+    }
 
     if (this.codespace.lastUsedAt) {
       const lastUsed = new Date(this.codespace.lastUsedAt);
@@ -212,6 +235,27 @@ function getTimeAgo(date: Date): string {
   } else {
     return date.toLocaleDateString();
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) {
+    return `${Math.round(gb)} GB`;
+  }
+  const mb = bytes / (1024 * 1024);
+  return `${Math.round(mb)} MB`;
+}
+
+function formatMachineSpecs(machineInfo: MachineInfo): string {
+  const parts: string[] = [];
+  if (machineInfo.cpus > 0) {
+    parts.push(`${machineInfo.cpus} ${machineInfo.cpus === 1 ? 'core' : 'cores'}`);
+  }
+  if (machineInfo.memoryInBytes > 0) {
+    parts.push(`${formatBytes(machineInfo.memoryInBytes)} RAM`);
+  }
+  return parts.join(' • ') || machineInfo.displayName || 'Unknown';
 }
 
 function getIdleTimeRemaining(

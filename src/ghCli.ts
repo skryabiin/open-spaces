@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
-import { Codespace, CodespaceState, GhCliError, GitStatus } from './types';
+import { Codespace, CodespaceState, GhCliError, GitStatus, MachineInfo } from './types';
 
 const execFileAsync = promisify(execFile);
 
@@ -333,6 +333,13 @@ export async function deleteCodespace(codespaceName: string): Promise<void> {
 interface CodespaceViewResponse {
   idleTimeoutMinutes?: number;
   lastUsedAt?: string;
+  machine?: {
+    name?: string;
+    displayName?: string;
+    cpus?: number;
+    memoryInBytes?: number;
+    storageInBytes?: number;
+  };
 }
 
 /**
@@ -363,6 +370,40 @@ export async function getCodespaceIdleTimeout(
     return {
       idleTimeoutMinutes: response.idleTimeoutMinutes,
       lastUsedAt: response.lastUsedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Gets the machine info for a codespace.
+ * @param codespaceName - The name of the codespace
+ * @returns MachineInfo object or null if not available
+ */
+export async function getCodespaceMachineInfo(codespaceName: string): Promise<MachineInfo | null> {
+  validateCodespaceName(codespaceName);
+  try {
+    const result = await runGh(
+      ['codespace', 'view', '-c', codespaceName, '--json', 'machine'],
+      30000
+    );
+
+    const data: unknown = JSON.parse(result.stdout);
+    if (typeof data !== 'object' || data === null) {
+      return null;
+    }
+
+    const response = data as CodespaceViewResponse;
+    if (!response.machine || typeof response.machine.cpus !== 'number') {
+      return null;
+    }
+
+    return {
+      cpus: response.machine.cpus,
+      memoryInBytes: response.machine.memoryInBytes || 0,
+      storageInBytes: response.machine.storageInBytes || 0,
+      displayName: response.machine.displayName || response.machine.name || '',
     };
   } catch {
     return null;

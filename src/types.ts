@@ -21,6 +21,13 @@ export interface GitStatus {
   hasUnpushedChanges: boolean;
 }
 
+export interface MachineInfo {
+  cpus: number;
+  memoryInBytes: number;
+  storageInBytes: number;
+  displayName: string;
+}
+
 export interface Codespace {
   name: string;
   displayName: string;
@@ -33,6 +40,7 @@ export interface Codespace {
   machineName: string;
   gitStatus: GitStatus;
   idleTimeoutMinutes?: number;
+  machineInfo?: MachineInfo;
 }
 
 export type GhCliErrorType =
