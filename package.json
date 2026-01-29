@@ -1,0 +1,154 @@
+{
+  "name": "open-spaces",
+  "displayName": "Open Spaces",
+  "description": "Connect to GitHub Codespaces from Code-OSS/VS Codium using GitHub CLI and open-remote-ssh",
+  "version": "0.0.1",
+  "publisher": "skryabiin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skryabiin/open-spaces"
+  },
+  "homepage": "https://github.com/skryabiin/open-spaces#readme",
+  "bugs": {
+    "url": "https://github.com/skryabiin/open-spaces/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "openSpaces",
+          "title": "GitHub Codespaces",
+          "icon": "resources/codespaces.svg"
+        }
+      ]
+    },
+    "views": {
+      "openSpaces": [
+        {
+          "id": "openSpaces.codespaceTree",
+          "name": "Codespaces"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "openSpaces.connect",
+        "title": "Connect to Codespace",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "openSpaces.start",
+        "title": "Start Codespace",
+        "icon": "$(play)"
+      },
+      {
+        "command": "openSpaces.stop",
+        "title": "Stop Codespace",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "openSpaces.refresh",
+        "title": "Refresh Codespaces",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "openSpaces.openAuthTerminal",
+        "title": "Authenticate with GitHub CLI",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "openSpaces.rebuild",
+        "title": "Rebuild Codespace",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "openSpaces.rebuildFull",
+        "title": "Rebuild Codespace (Full)",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "openSpaces.disconnect",
+        "title": "Disconnect from Codespace",
+        "icon": "$(debug-disconnect)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "openSpaces.disconnect",
+          "when": "view == openSpaces.codespaceTree && openSpaces.insideCodespace",
+          "group": "navigation@1"
+        },
+        {
+          "command": "openSpaces.refresh",
+          "when": "view == openSpaces.codespaceTree",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "openSpaces.connect",
+          "when": "view == openSpaces.codespaceTree && viewItem == codespace-available",
+          "group": "inline@1"
+        },
+        {
+          "command": "openSpaces.connect",
+          "when": "view == openSpaces.codespaceTree && viewItem == codespace-shutdown",
+          "group": "inline@1"
+        },
+        {
+          "command": "openSpaces.start",
+          "when": "view == openSpaces.codespaceTree && viewItem == codespace-shutdown",
+          "group": "inline@2"
+        },
+        {
+          "command": "openSpaces.stop",
+          "when": "view == openSpaces.codespaceTree && viewItem == codespace-available",
+          "group": "inline@2"
+        },
+        {
+          "command": "openSpaces.openAuthTerminal",
+          "when": "view == openSpaces.codespaceTree && viewItem == auth-required",
+          "group": "inline"
+        },
+        {
+          "command": "openSpaces.rebuild",
+          "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/",
+          "group": "rebuild@1"
+        },
+        {
+          "command": "openSpaces.rebuildFull",
+          "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/",
+          "group": "rebuild@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.3.0"
+  }
+}

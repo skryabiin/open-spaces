@@ -1,0 +1,203 @@
+import * as vscode from 'vscode';
+import * as ghCli from '../ghCli';
+import * as codespaceManager from '../codespaceManager';
+import { Codespace, GhCliError } from '../types';
+import {
+  RepositoryTreeItem,
+  CodespaceTreeItem,
+  CodespaceDetailItem,
+  GhNotInstalledTreeItem,
+  AuthRequiredTreeItem,
+  NoCodespacesTreeItem,
+  LoadingTreeItem,
+  ErrorTreeItem,
+} from './treeItems';
+
+type TreeItem =
+  | RepositoryTreeItem
+  | CodespaceTreeItem
+  | CodespaceDetailItem
+  | GhNotInstalledTreeItem
+  | AuthRequiredTreeItem
+  | NoCodespacesTreeItem
+  | LoadingTreeItem
+  | ErrorTreeItem;
+
+export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<TreeItem | undefined | null | void>();
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  private codespaces: Codespace[] = [];
+  private loading = true;
+  private error: GhCliError | Error | null = null;
+  private ghInstalled = true;
+  private authenticated = true;
+
+  private isPolling = false;
+  private pollTimer: NodeJS.Timeout | null = null;
+  private pollInterval = 5000;
+
+  constructor() {}
+
+  refresh(): void {
+    this.loading = true;
+    this._onDidChangeTreeData.fire();
+    void this.loadCodespaces();
+  }
+
+  async loadCodespaces(): Promise<void> {
+    this.stopPolling();
+    await this.loadCodespacesInternal();
+    this.startPollingIfNeeded();
+  }
+
+  private async loadCodespacesInternal(): Promise<void> {
+    try {
+      // Check prerequisites
+      const prereq = await codespaceManager.checkPrerequisites();
+
+      if (!prereq.ready) {
+        this.ghInstalled = prereq.ghInstalled;
+        this.authenticated = prereq.authenticated;
+        this.error = prereq.error || null;
+        this.codespaces = [];
+        this.loading = false;
+        this._onDidChangeTreeData.fire();
+        return;
+      }
+
+      this.ghInstalled = true;
+      this.authenticated = true;
+
+      // Load codespaces
+      this.codespaces = await ghCli.listCodespaces();
+      this.error = null;
+      this.loading = false;
+      this._onDidChangeTreeData.fire();
+    } catch (err) {
+      this.error = err instanceof Error ? err : new Error(String(err));
+      this.codespaces = [];
+      this.loading = false;
+      this._onDidChangeTreeData.fire();
+    }
+  }
+
+  private startPollingIfNeeded(): void {
+    if (this.isPolling) {
+      return;
+    }
+
+    const transitionalStates = [
+      'Starting',
+      'ShuttingDown',
+      'Provisioning',
+      'Rebuilding',
+      'Exporting',
+      'Updating',
+    ];
+
+    const hasTransitional = this.codespaces.some((cs) => transitionalStates.includes(cs.state));
+
+    if (hasTransitional) {
+      this.isPolling = true;
+      this.pollTimer = setInterval(() => {
+        if (this.isPolling) {
+          void this.loadCodespacesInternal();
+        }
+      }, this.pollInterval);
+    }
+  }
+
+  private stopPolling(): void {
+    this.isPolling = false;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  getTreeItem(element: TreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(element?: TreeItem): Thenable<TreeItem[]> {
+    if (element instanceof RepositoryTreeItem) {
+      return Promise.resolve(element.getChildren());
+    }
+
+    if (element instanceof CodespaceTreeItem) {
+      return Promise.resolve(element.getChildren());
+    }
+
+    if (element) {
+      return Promise.resolve([]);
+    }
+
+    if (this.loading) {
+      return Promise.resolve([new LoadingTreeItem()]);
+    }
+
+    if (!this.ghInstalled) {
+      return Promise.resolve([new GhNotInstalledTreeItem()]);
+    }
+
+    if (!this.authenticated) {
+      const message =
+        this.error instanceof GhCliError ? this.error.message : 'Authentication required';
+      return Promise.resolve([new AuthRequiredTreeItem(message)]);
+    }
+
+    if (this.error) {
+      return Promise.resolve([new ErrorTreeItem(this.error.message)]);
+    }
+
+    if (this.codespaces.length === 0) {
+      return Promise.resolve([new NoCodespacesTreeItem()]);
+    }
+
+    // Group codespaces by repository
+    const repoMap = new Map<string, Codespace[]>();
+    for (const cs of this.codespaces) {
+      const repo = cs.repository || 'Unknown';
+      const existing = repoMap.get(repo);
+      if (existing) {
+        existing.push(cs);
+      } else {
+        repoMap.set(repo, [cs]);
+      }
+    }
+
+    // Sort codespaces within each repo: running first, then by last used
+    for (const codespaces of repoMap.values()) {
+      codespaces.sort((a, b) => {
+        if (a.state === 'Available' && b.state !== 'Available') return -1;
+        if (a.state !== 'Available' && b.state === 'Available') return 1;
+        const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+        const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+    }
+
+    // Sort repositories: those with running codespaces first, then alphabetically
+    const sortedRepos = [...repoMap.entries()].sort((a, b) => {
+      const aHasRunning = a[1].some((cs) => cs.state === 'Available');
+      const bHasRunning = b[1].some((cs) => cs.state === 'Available');
+      if (aHasRunning && !bHasRunning) return -1;
+      if (!aHasRunning && bHasRunning) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+    return Promise.resolve(
+      sortedRepos.map(([repo, codespaces]) => new RepositoryTreeItem(repo, codespaces))
+    );
+  }
+
+  getCodespaceByName(name: string): Codespace | undefined {
+    return this.codespaces.find((cs) => cs.name === name);
+  }
+
+  dispose(): void {
+    this.stopPolling();
+    this._onDidChangeTreeData.dispose();
+  }
+}
