@@ -462,18 +462,37 @@ export interface Repository {
   nameWithOwner: string;
   description: string;
   isPrivate: boolean;
+  pushedAt?: string;
 }
 
-interface RepoResponse {
+interface OrgResponse {
+  login?: string;
+}
+
+function isOrgResponse(data: unknown): data is OrgResponse[] {
+  return (
+    Array.isArray(data) &&
+    data.every((item): item is OrgResponse => {
+      if (typeof item !== 'object' || item === null) {
+        return false;
+      }
+      const obj = item as Record<string, unknown>;
+      return 'login' in obj && typeof obj.login === 'string';
+    })
+  );
+}
+
+interface RepoListResponse {
   nameWithOwner?: string;
   description?: string;
   isPrivate?: boolean;
+  pushedAt?: string;
 }
 
-function isRepoResponse(data: unknown): data is RepoResponse[] {
+function isRepoListResponse(data: unknown): data is RepoListResponse[] {
   return (
     Array.isArray(data) &&
-    data.every((item): item is RepoResponse => {
+    data.every((item): item is RepoListResponse => {
       if (typeof item !== 'object' || item === null) {
         return false;
       }
@@ -485,30 +504,102 @@ function isRepoResponse(data: unknown): data is RepoResponse[] {
 
 /**
  * Lists repositories the user can create codespaces for.
+ * Shows repos from user's recent push events first, then remaining org/user repos.
  * @returns Array of Repository objects
  */
 export async function listRepositories(): Promise<Repository[]> {
-  const result = await runGh(
-    ['repo', 'list', '--json', 'nameWithOwner,description,isPrivate', '--limit', '100'],
-    60000
-  );
+  const repos: Repository[] = [];
+  const seenRepos = new Set<string>();
 
+  // Get current user's login and recent push events
   try {
-    const data: unknown = JSON.parse(result.stdout);
-    if (!isRepoResponse(data)) {
-      throw new GhCliError('PARSE_ERROR', 'Invalid repository list response structure');
+    const userResult = await runGh(['api', '/user', '-q', '.login'], 10000);
+    const username = userResult.stdout.trim();
+
+    if (username) {
+      const eventsResult = await runGh(
+        ['api', `/users/${username}/events`, '-q', '.[] | select(.type == "PushEvent") | .repo.name'],
+        30000
+      );
+
+      const repoNames = eventsResult.stdout.trim().split('\n').filter(Boolean);
+
+      // Add recently pushed repos first (dedupe, preserving order)
+      for (const name of repoNames) {
+        if (!seenRepos.has(name)) {
+          seenRepos.add(name);
+          repos.push({
+            nameWithOwner: name,
+            description: '',
+            isPrivate: true,
+          });
+        }
+      }
     }
-    return data.map((repo) => ({
-      nameWithOwner: repo.nameWithOwner || '',
-      description: repo.description || '',
-      isPrivate: repo.isPrivate || false,
-    }));
-  } catch (error) {
-    if (error instanceof GhCliError) {
-      throw error;
-    }
-    throw new GhCliError('PARSE_ERROR', 'Failed to parse repository list output');
+  } catch {
+    // Continue to org/user repos
   }
+
+  // Add org repos
+  try {
+    const orgsResult = await runGh(['api', '/user/orgs', '-q', '.[].login'], 30000);
+    const orgLogins = orgsResult.stdout.trim().split('\n').filter(Boolean);
+
+    for (const org of orgLogins) {
+      try {
+        const result = await runGh(
+          ['repo', 'list', org, '--json', 'nameWithOwner,description,isPrivate', '--limit', '9999'],
+          120000
+        );
+
+        const data: unknown = JSON.parse(result.stdout);
+        if (isRepoListResponse(data)) {
+          for (const repo of data) {
+            const name = repo.nameWithOwner || '';
+            if (!seenRepos.has(name)) {
+              seenRepos.add(name);
+              repos.push({
+                nameWithOwner: name,
+                description: repo.description || '',
+                isPrivate: repo.isPrivate || false,
+              });
+            }
+          }
+        }
+      } catch {
+        // Skip orgs that fail (e.g., no access)
+      }
+    }
+  } catch {
+    // Ignore org errors
+  }
+
+  // Add user's own repos
+  try {
+    const userReposResult = await runGh(
+      ['repo', 'list', '--json', 'nameWithOwner,description,isPrivate', '--limit', '9999'],
+      30000
+    );
+
+    const userData: unknown = JSON.parse(userReposResult.stdout);
+    if (isRepoListResponse(userData)) {
+      for (const repo of userData) {
+        const name = repo.nameWithOwner || '';
+        if (!seenRepos.has(name)) {
+          seenRepos.add(name);
+          repos.push({
+            nameWithOwner: name,
+            description: repo.description || '',
+            isPrivate: repo.isPrivate || false,
+          });
+        }
+      }
+    }
+  } catch {
+    // Ignore - user may not have personal repos (EMU)
+  }
+
+  return repos;
 }
 
 export interface Branch {

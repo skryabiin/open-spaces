@@ -355,7 +355,7 @@ export async function createCodespace(): Promise<string | undefined> {
   const repos = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Loading repositories...',
+      title: 'Loading repositories (this may take a moment for large organizations)...',
       cancellable: false,
     },
     async () => {
