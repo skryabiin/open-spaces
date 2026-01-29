@@ -32,6 +32,7 @@ export interface Codespace {
   createdAt: string;
   machineName: string;
   gitStatus: GitStatus;
+  idleTimeoutMinutes?: number;
 }
 
 export type GhCliErrorType =

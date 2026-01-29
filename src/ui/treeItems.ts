@@ -90,6 +90,15 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       const lastUsed = new Date(this.codespace.lastUsedAt);
       md.appendMarkdown(`- Last used: ${lastUsed.toLocaleString()}\n`);
     }
+    if (this.codespace.state === 'Available' && this.codespace.idleTimeoutMinutes) {
+      const idleInfo = getIdleTimeRemaining(
+        this.codespace.lastUsedAt,
+        this.codespace.idleTimeoutMinutes
+      );
+      if (idleInfo) {
+        md.appendMarkdown(`- ${idleInfo.text}\n`);
+      }
+    }
     return md;
   }
 
@@ -144,6 +153,24 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       children.push(new CodespaceDetailItem('clock', timeAgo, 'lastUsed'));
     }
 
+    // Show idle timeout remaining for running codespaces
+    if (this.codespace.state === 'Available' && this.codespace.idleTimeoutMinutes) {
+      const idleInfo = getIdleTimeRemaining(
+        this.codespace.lastUsedAt,
+        this.codespace.idleTimeoutMinutes
+      );
+      if (idleInfo) {
+        children.push(
+          new CodespaceDetailItem(
+            'watch',
+            idleInfo.text,
+            'idleTimeout',
+            idleInfo.isLow ? new vscode.ThemeColor('editorWarning.foreground') : undefined
+          )
+        );
+      }
+    }
+
     return children;
   }
 }
@@ -185,6 +212,42 @@ function getTimeAgo(date: Date): string {
   } else {
     return date.toLocaleDateString();
   }
+}
+
+function getIdleTimeRemaining(
+  lastUsedAt: string,
+  idleTimeoutMinutes: number
+): { text: string; isLow: boolean } | null {
+  if (!lastUsedAt || !idleTimeoutMinutes) {
+    return null;
+  }
+
+  const lastUsed = new Date(lastUsedAt);
+  const now = new Date();
+  const elapsedMs = now.getTime() - lastUsed.getTime();
+  const elapsedMins = Math.floor(elapsedMs / 60000);
+  const remainingMins = idleTimeoutMinutes - elapsedMins;
+
+  // If the codespace is actively being used, lastUsedAt updates frequently
+  // so remaining time should be close to the full timeout
+  if (remainingMins <= 0) {
+    return { text: 'Auto-stop imminent', isLow: true };
+  }
+
+  const isLow = remainingMins <= 10;
+
+  if (remainingMins < 60) {
+    return { text: `Auto-stop in ${remainingMins}m`, isLow };
+  }
+
+  const hours = Math.floor(remainingMins / 60);
+  const mins = remainingMins % 60;
+
+  if (mins === 0) {
+    return { text: `Auto-stop in ${hours}h`, isLow };
+  }
+
+  return { text: `Auto-stop in ${hours}h ${mins}m`, isLow };
 }
 
 export class GhNotInstalledTreeItem extends vscode.TreeItem {

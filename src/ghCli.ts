@@ -330,6 +330,45 @@ export async function deleteCodespace(codespaceName: string): Promise<void> {
   await runGh(['api', '-X', 'DELETE', `/user/codespaces/${codespaceName}`], 60000);
 }
 
+interface CodespaceViewResponse {
+  idleTimeoutMinutes?: number;
+  lastUsedAt?: string;
+}
+
+/**
+ * Gets the idle timeout information for a codespace.
+ * @param codespaceName - The name of the codespace
+ * @returns Object with idleTimeoutMinutes and lastUsedAt, or null if not available
+ */
+export async function getCodespaceIdleTimeout(
+  codespaceName: string
+): Promise<{ idleTimeoutMinutes: number; lastUsedAt: string } | null> {
+  validateCodespaceName(codespaceName);
+  try {
+    const result = await runGh(
+      ['codespace', 'view', '-c', codespaceName, '--json', 'idleTimeoutMinutes,lastUsedAt'],
+      30000
+    );
+
+    const data: unknown = JSON.parse(result.stdout);
+    if (typeof data !== 'object' || data === null) {
+      return null;
+    }
+
+    const response = data as CodespaceViewResponse;
+    if (typeof response.idleTimeoutMinutes !== 'number' || !response.lastUsedAt) {
+      return null;
+    }
+
+    return {
+      idleTimeoutMinutes: response.idleTimeoutMinutes,
+      lastUsedAt: response.lastUsedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Waits for a codespace to reach a target state.
  * @param codespaceName - The name of the codespace

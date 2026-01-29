@@ -75,6 +75,22 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
 
       // Load codespaces
       this.codespaces = await ghCli.listCodespaces();
+
+      // Fetch idle timeout info for running codespaces
+      const runningCodespaces = this.codespaces.filter((cs) => cs.state === 'Available');
+      await Promise.all(
+        runningCodespaces.map(async (cs) => {
+          const idleInfo = await ghCli.getCodespaceIdleTimeout(cs.name);
+          if (idleInfo) {
+            cs.idleTimeoutMinutes = idleInfo.idleTimeoutMinutes;
+            // Update lastUsedAt if the view command returns a more recent value
+            if (idleInfo.lastUsedAt) {
+              cs.lastUsedAt = idleInfo.lastUsedAt;
+            }
+          }
+        })
+      );
+
       this.error = null;
       this.loading = false;
       this._onDidChangeTreeData.fire();
