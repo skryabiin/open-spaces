@@ -235,6 +235,21 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.create', async () => {
+      try {
+        const codespaceName = await codespaceManager.createCodespace();
+        if (codespaceName) {
+          treeProvider.refresh();
+        }
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        log('Failed to create codespace', err);
+        void vscode.window.showErrorMessage(`Failed to create codespace: ${err.message}`);
+      }
+    })
+  );
+
   // Initial load
   void treeProvider.loadCodespaces();
 }

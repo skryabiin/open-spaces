@@ -4,9 +4,9 @@ Potential features to add to the extension.
 
 ## High-Value Features
 
-- [ ] **Create Codespace** - Add ability to create new codespaces directly from the extension. Users could right-click a repository (or use command palette) to create a codespace with options for branch, machine type, and region.
+- [x] **Create Codespace** - Add ability to create new codespaces directly from the extension. Users could right-click a repository (or use command palette) to create a codespace with options for branch, machine type, and region.
 
-- [ ] **Delete Codespace** - Allow users to delete codespaces from the tree view with a confirmation dialog. This completes the CRUD lifecycle.
+- [x] **Delete Codespace** - Allow users to delete codespaces from the tree view with a confirmation dialog. This completes the CRUD lifecycle.
 
 - [ ] **Open SSH Terminal** - Add a command to open a terminal session directly connected to a codespace via SSH, without opening the full remote workspace. Useful for quick commands or troubleshooting.
 

@@ -87,19 +87,29 @@
         "command": "openSpaces.delete",
         "title": "Delete Codespace",
         "icon": "$(trash)"
+      },
+      {
+        "command": "openSpaces.create",
+        "title": "Create Codespace",
+        "icon": "$(add)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "openSpaces.create",
+          "when": "view == openSpaces.codespaceTree",
+          "group": "navigation@1"
+        },
+        {
           "command": "openSpaces.disconnect",
           "when": "view == openSpaces.codespaceTree && openSpaces.insideCodespace",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "openSpaces.refresh",
           "when": "view == openSpaces.codespaceTree",
-          "group": "navigation@2"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [

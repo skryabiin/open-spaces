@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as ghCli from './ghCli';
 import * as sshConfigManager from './sshConfigManager';
 import { Codespace, GhCliError } from './types';
+import { log } from './extension';
 
 export interface PrerequisiteResult {
   ready: boolean;
@@ -278,4 +279,165 @@ export async function deleteCodespace(codespace: Codespace): Promise<void> {
   );
 
   void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} deleted`);
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) {
+    return '0 GB';
+  }
+  const gb = bytes / (1024 * 1024 * 1024);
+  return `${gb.toFixed(0)} GB`;
+}
+
+/**
+ * Creates a new codespace with an interactive UI flow.
+ * @returns The name of the created codespace, or undefined if cancelled
+ */
+export async function createCodespace(): Promise<string | undefined> {
+  // Step 1: Select repository
+  const repos = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Loading repositories...',
+      cancellable: false,
+    },
+    async () => {
+      return await ghCli.listRepositories();
+    }
+  );
+
+  if (repos.length === 0) {
+    void vscode.window.showWarningMessage('No repositories found');
+    return undefined;
+  }
+
+  const repoItems: vscode.QuickPickItem[] = repos.map((repo) => ({
+    label: repo.nameWithOwner,
+    description: repo.isPrivate ? '$(lock) Private' : '$(globe) Public',
+    detail: repo.description || undefined,
+  }));
+
+  const selectedRepo = await vscode.window.showQuickPick(repoItems, {
+    placeHolder: 'Select a repository',
+    title: 'Create Codespace - Select Repository',
+  });
+
+  if (!selectedRepo) {
+    return undefined;
+  }
+
+  const repo = selectedRepo.label;
+
+  // Step 2: Select branch
+  let branches: ghCli.Branch[] = [];
+  try {
+    branches = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Loading branches...',
+        cancellable: false,
+      },
+      async () => {
+        return await ghCli.listBranches(repo);
+      }
+    );
+  } catch (error) {
+    log('Failed to load branches, using default', error instanceof Error ? error : undefined);
+  }
+
+  let selectedBranch: string | undefined;
+  if (branches.length > 0) {
+    const branchItems: vscode.QuickPickItem[] = [
+      { label: '$(git-branch) Default branch', description: 'Use the repository default branch' },
+      ...branches.map((branch) => ({
+        label: branch.name,
+        description: '',
+      })),
+    ];
+
+    const branchSelection = await vscode.window.showQuickPick(branchItems, {
+      placeHolder: 'Select a branch',
+      title: 'Create Codespace - Select Branch',
+    });
+
+    if (!branchSelection) {
+      return undefined;
+    }
+
+    if (!branchSelection.label.startsWith('$(git-branch)')) {
+      selectedBranch = branchSelection.label;
+    }
+  }
+
+  // Step 3: Select machine type
+  let machineTypes: ghCli.MachineType[] = [];
+  try {
+    machineTypes = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Loading machine types...',
+        cancellable: false,
+      },
+      async () => {
+        return await ghCli.listMachineTypes(repo, selectedBranch);
+      }
+    );
+  } catch (error) {
+    log('Failed to load machine types, using default', error instanceof Error ? error : undefined);
+  }
+
+  let selectedMachine: string | undefined;
+  if (machineTypes.length > 0) {
+    const machineItems: vscode.QuickPickItem[] = [
+      { label: '$(server) Default', description: 'Use the repository default machine type' },
+      ...machineTypes.map((machine) => ({
+        label: machine.displayName,
+        description: `${machine.cpus} cores, ${formatBytes(machine.memoryInBytes)} RAM, ${formatBytes(machine.storageInBytes)} storage`,
+        detail: machine.name,
+      })),
+    ];
+
+    const machineSelection = await vscode.window.showQuickPick(machineItems, {
+      placeHolder: 'Select a machine type',
+      title: 'Create Codespace - Select Machine Type',
+    });
+
+    if (!machineSelection) {
+      return undefined;
+    }
+
+    if (!machineSelection.label.startsWith('$(server)')) {
+      selectedMachine = machineSelection.detail;
+    }
+  }
+
+  // Step 4: Optional display name
+  const displayName = await vscode.window.showInputBox({
+    prompt: 'Enter a display name for the codespace (optional)',
+    placeHolder: 'my-codespace',
+    title: 'Create Codespace - Display Name',
+  });
+
+  // User pressed Escape on optional field - continue with creation
+  // (showInputBox returns undefined for Escape, empty string for Enter with no input)
+
+  // Create the codespace
+  const codespaceName = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Creating codespace for ${repo}...`,
+      cancellable: false,
+    },
+    async () => {
+      return await ghCli.createCodespace({
+        repo,
+        branch: selectedBranch,
+        machineType: selectedMachine,
+        displayName: displayName || undefined,
+      });
+    }
+  );
+
+  void vscode.window.showInformationMessage(`Codespace created: ${codespaceName}`);
+  return codespaceName;
 }

@@ -377,3 +377,223 @@ export async function waitForState(
     `Timeout waiting for codespace ${codespaceName} to reach state ${targetState}`
   );
 }
+
+export interface Repository {
+  nameWithOwner: string;
+  description: string;
+  isPrivate: boolean;
+}
+
+interface RepoResponse {
+  nameWithOwner?: string;
+  description?: string;
+  isPrivate?: boolean;
+}
+
+function isRepoResponse(data: unknown): data is RepoResponse[] {
+  return (
+    Array.isArray(data) &&
+    data.every((item): item is RepoResponse => {
+      if (typeof item !== 'object' || item === null) {
+        return false;
+      }
+      const obj = item as Record<string, unknown>;
+      return 'nameWithOwner' in obj && typeof obj.nameWithOwner === 'string';
+    })
+  );
+}
+
+/**
+ * Lists repositories the user can create codespaces for.
+ * @returns Array of Repository objects
+ */
+export async function listRepositories(): Promise<Repository[]> {
+  const result = await runGh(
+    ['repo', 'list', '--json', 'nameWithOwner,description,isPrivate', '--limit', '100'],
+    60000
+  );
+
+  try {
+    const data: unknown = JSON.parse(result.stdout);
+    if (!isRepoResponse(data)) {
+      throw new GhCliError('PARSE_ERROR', 'Invalid repository list response structure');
+    }
+    return data.map((repo) => ({
+      nameWithOwner: repo.nameWithOwner || '',
+      description: repo.description || '',
+      isPrivate: repo.isPrivate || false,
+    }));
+  } catch (error) {
+    if (error instanceof GhCliError) {
+      throw error;
+    }
+    throw new GhCliError('PARSE_ERROR', 'Failed to parse repository list output');
+  }
+}
+
+export interface Branch {
+  name: string;
+}
+
+interface BranchResponse {
+  name?: string;
+}
+
+function isBranchResponse(data: unknown): data is BranchResponse[] {
+  return (
+    Array.isArray(data) &&
+    data.every((item): item is BranchResponse => {
+      if (typeof item !== 'object' || item === null) {
+        return false;
+      }
+      const obj = item as Record<string, unknown>;
+      return 'name' in obj && typeof obj.name === 'string';
+    })
+  );
+}
+
+/**
+ * Lists branches for a repository.
+ * @param repo - The repository in owner/name format
+ * @returns Array of Branch objects
+ */
+export async function listBranches(repo: string): Promise<Branch[]> {
+  const result = await runGh(
+    ['api', `repos/${repo}/branches`, '--jq', '[.[] | {name: .name}]'],
+    60000
+  );
+
+  try {
+    const data: unknown = JSON.parse(result.stdout);
+    if (!isBranchResponse(data)) {
+      throw new GhCliError('PARSE_ERROR', 'Invalid branch list response structure');
+    }
+    return data.map((branch) => ({
+      name: branch.name || '',
+    }));
+  } catch (error) {
+    if (error instanceof GhCliError) {
+      throw error;
+    }
+    throw new GhCliError('PARSE_ERROR', 'Failed to parse branch list output');
+  }
+}
+
+export interface MachineType {
+  name: string;
+  displayName: string;
+  cpus: number;
+  memoryInBytes: number;
+  storageInBytes: number;
+}
+
+interface MachineTypeResponse {
+  name?: string;
+  display_name?: string;
+  cpus?: number;
+  memory_in_bytes?: number;
+  storage_in_bytes?: number;
+}
+
+interface MachinesApiResponse {
+  machines?: MachineTypeResponse[];
+}
+
+function isMachinesApiResponse(data: unknown): data is MachinesApiResponse {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+  const obj = data as Record<string, unknown>;
+  if (!('machines' in obj) || !Array.isArray(obj.machines)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Lists available machine types for a repository.
+ * @param repo - The repository in owner/name format
+ * @param branch - Optional branch name
+ * @returns Array of MachineType objects
+ */
+export async function listMachineTypes(repo: string, branch?: string): Promise<MachineType[]> {
+  const endpoint = branch
+    ? `repos/${repo}/codespaces/machines?ref=${encodeURIComponent(branch)}`
+    : `repos/${repo}/codespaces/machines`;
+
+  const result = await runGh(['api', endpoint], 60000);
+
+  try {
+    const data: unknown = JSON.parse(result.stdout);
+    if (!isMachinesApiResponse(data)) {
+      throw new GhCliError('PARSE_ERROR', 'Invalid machine types response structure');
+    }
+    return (data.machines || []).map((machine) => ({
+      name: machine.name || '',
+      displayName: machine.display_name || machine.name || '',
+      cpus: machine.cpus || 0,
+      memoryInBytes: machine.memory_in_bytes || 0,
+      storageInBytes: machine.storage_in_bytes || 0,
+    }));
+  } catch (error) {
+    if (error instanceof GhCliError) {
+      throw error;
+    }
+    throw new GhCliError('PARSE_ERROR', 'Failed to parse machine types output');
+  }
+}
+
+export interface CreateCodespaceOptions {
+  repo: string;
+  branch?: string;
+  machineType?: string;
+  location?: string;
+  displayName?: string;
+}
+
+interface CreateCodespaceResponse {
+  name?: string;
+  state?: string;
+}
+
+/**
+ * Creates a new codespace.
+ * @param options - Options for creating the codespace
+ * @returns The name of the created codespace
+ */
+export async function createCodespace(options: CreateCodespaceOptions): Promise<string> {
+  const args = ['codespace', 'create', '--repo', options.repo, '--json', 'name,state'];
+
+  if (options.branch) {
+    args.push('--branch', options.branch);
+  }
+  if (options.machineType) {
+    args.push('--machine', options.machineType);
+  }
+  if (options.location) {
+    args.push('--location', options.location);
+  }
+  if (options.displayName) {
+    args.push('--display-name', options.displayName);
+  }
+
+  // Creating a codespace can take a while
+  const result = await runGh(args, 300000);
+
+  try {
+    const data: unknown = JSON.parse(result.stdout);
+    if (typeof data !== 'object' || data === null || !('name' in data)) {
+      throw new GhCliError('PARSE_ERROR', 'Invalid create codespace response');
+    }
+    const response = data as CreateCodespaceResponse;
+    if (!response.name) {
+      throw new GhCliError('PARSE_ERROR', 'No codespace name in response');
+    }
+    return response.name;
+  } catch (error) {
+    if (error instanceof GhCliError) {
+      throw error;
+    }
+    throw new GhCliError('PARSE_ERROR', 'Failed to parse create codespace output');
+  }
+}
