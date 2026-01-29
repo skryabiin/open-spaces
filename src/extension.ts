@@ -162,6 +162,23 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.openSshTerminal', async (item?: CodespaceTreeItem) => {
+      if (!item?.codespace) {
+        void vscode.window.showErrorMessage('No codespace selected');
+        return;
+      }
+
+      try {
+        await codespaceManager.openSshTerminal(item.codespace);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        log(`Failed to open SSH terminal for codespace ${item.codespace.name}`, err);
+        void vscode.window.showErrorMessage(`Failed to open SSH terminal: ${err.message}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.rebuild', async (item?: CodespaceTreeItem) => {
       if (!item?.codespace) {
         void vscode.window.showErrorMessage('No codespace selected');

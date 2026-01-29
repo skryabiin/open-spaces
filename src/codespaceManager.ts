@@ -216,6 +216,63 @@ export function openAuthTerminal(): void {
 }
 
 /**
+ * Opens a terminal session connected to a codespace via SSH.
+ * If the codespace is shutdown, it will be started first.
+ * @param codespace - The codespace to connect to
+ */
+export async function openSshTerminal(codespace: Codespace): Promise<void> {
+  // Fetch fresh codespace state
+  const freshCodespace = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Checking codespace status...`,
+      cancellable: false,
+    },
+    async () => {
+      return await ghCli.getCodespace(codespace.name);
+    }
+  );
+
+  if (!freshCodespace) {
+    throw new Error(`Codespace ${codespace.displayName} no longer exists`);
+  }
+
+  if (freshCodespace.state === 'Failed') {
+    throw new Error(`Codespace ${codespace.displayName} is in a failed state. Please rebuild it.`);
+  }
+
+  // Handle non-available states
+  if (freshCodespace.state !== 'Available') {
+    const transitionalStates = ['Starting', 'Provisioning', 'Rebuilding', 'Updating'];
+    const isTransitional = transitionalStates.includes(freshCodespace.state);
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: isTransitional
+          ? `Waiting for codespace ${codespace.displayName}...`
+          : `Starting codespace ${codespace.displayName}...`,
+        cancellable: false,
+      },
+      async () => {
+        // Only start if it's shutdown, not if it's already transitioning
+        if (freshCodespace.state === 'Shutdown') {
+          await ghCli.startCodespace(codespace.name);
+        }
+        await ghCli.waitForState(codespace.name, 'Available');
+      }
+    );
+  }
+
+  // Create terminal with SSH connection
+  const terminal = vscode.window.createTerminal({
+    name: `SSH: ${codespace.displayName}`,
+  });
+  terminal.show();
+  terminal.sendText(`gh codespace ssh -c ${codespace.name}`);
+}
+
+/**
  * Rebuilds a codespace container.
  * @param codespace - The codespace to rebuild
  * @param full - Whether to do a full rebuild without cache

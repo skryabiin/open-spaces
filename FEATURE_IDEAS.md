@@ -8,7 +8,7 @@ Potential features to add to the extension.
 
 - [x] **Delete Codespace** - Allow users to delete codespaces from the tree view with a confirmation dialog. This completes the CRUD lifecycle.
 
-- [ ] **Open SSH Terminal** - Add a command to open a terminal session directly connected to a codespace via SSH, without opening the full remote workspace. Useful for quick commands or troubleshooting.
+- [x] **Open SSH Terminal** - Add a command to open a terminal session directly connected to a codespace via SSH, without opening the full remote workspace. Useful for quick commands or troubleshooting.
 
 - [ ] **Port Forwarding Management** - Create a UI to view/manage forwarded ports on running codespaces using `gh codespace ports`. Could show port number, visibility (public/private), and allow changing visibility.
 
