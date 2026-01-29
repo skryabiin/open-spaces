@@ -37,6 +37,10 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
   private pollTimer: NodeJS.Timeout | null = null;
   private pollInterval = 5000;
 
+  private backgroundRefreshTimer: NodeJS.Timeout | null = null;
+  private backgroundRefreshInterval = 60000;
+  private isVisible = false;
+
   constructor() {}
 
   refresh(): void {
@@ -113,6 +117,39 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+  }
+
+  setVisible(visible: boolean): void {
+    const wasVisible = this.isVisible;
+    this.isVisible = visible;
+
+    if (visible && !wasVisible) {
+      // Pane just became visible - refresh immediately and start background refresh
+      this.refresh();
+      this.startBackgroundRefresh();
+    } else if (!visible && wasVisible) {
+      // Pane is now hidden - stop background refresh
+      this.stopBackgroundRefresh();
+    }
+  }
+
+  private startBackgroundRefresh(): void {
+    if (this.backgroundRefreshTimer) {
+      return;
+    }
+
+    this.backgroundRefreshTimer = setInterval(() => {
+      if (this.isVisible) {
+        void this.loadCodespacesInternal();
+      }
+    }, this.backgroundRefreshInterval);
+  }
+
+  private stopBackgroundRefresh(): void {
+    if (this.backgroundRefreshTimer) {
+      clearInterval(this.backgroundRefreshTimer);
+      this.backgroundRefreshTimer = null;
     }
   }
 
@@ -198,6 +235,7 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
 
   dispose(): void {
     this.stopPolling();
+    this.stopBackgroundRefresh();
     this._onDidChangeTreeData.dispose();
   }
 }
