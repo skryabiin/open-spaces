@@ -4,6 +4,7 @@ import { CodespaceTreeItem } from './ui/treeItems';
 import * as codespaceManager from './codespaceManager';
 import * as ghCli from './ghCli';
 import { ensureError } from './utils/errors';
+import { Codespace } from './types';
 
 let treeProvider: CodespaceTreeProvider;
 let outputChannel: vscode.OutputChannel;
@@ -22,6 +23,46 @@ export function log(message: string, error?: Error): void {
       outputChannel.appendLine(`  Stack: ${error.stack}`);
     }
   }
+}
+
+function getStateLabel(state: string): string {
+  switch (state) {
+    case 'Available': return '$(circle-filled) Running';
+    case 'Shutdown': return '$(circle-outline) Stopped';
+    case 'Starting': return '$(sync~spin) Starting';
+    case 'ShuttingDown': return '$(sync~spin) Stopping';
+    default: return state;
+  }
+}
+
+async function pickCodespace(title: string): Promise<Codespace | undefined> {
+  const codespaces = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Loading codespaces...',
+      cancellable: false,
+    },
+    () => ghCli.listCodespaces()
+  );
+
+  if (codespaces.length === 0) {
+    void vscode.window.showInformationMessage('No codespaces found');
+    return undefined;
+  }
+
+  const items = codespaces.map((cs) => ({
+    label: cs.displayName,
+    description: getStateLabel(cs.state),
+    detail: `${cs.repository} • ${cs.branch || 'default branch'}`,
+    codespace: cs,
+  }));
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Select a codespace',
+    title,
+  });
+
+  return selected?.codespace;
 }
 
 function isInsideCodespace(): boolean {
@@ -105,16 +146,16 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.connect', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Connect to Codespace');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.connect(item.codespace);
+        await codespaceManager.connect(codespace);
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to connect to codespace ${item.codespace.name}`, err);
+        log(`Failed to connect to codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to connect: ${err.message}`);
       }
     })
@@ -122,17 +163,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.start', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Start Codespace');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.start(item.codespace);
+        await codespaceManager.start(codespace);
         treeProvider.refresh();
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to start codespace ${item.codespace.name}`, err);
+        log(`Failed to start codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to start codespace: ${err.message}`);
       }
     })
@@ -140,17 +181,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.stop', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Stop Codespace');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.stop(item.codespace);
+        await codespaceManager.stop(codespace);
         treeProvider.refresh();
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to stop codespace ${item.codespace.name}`, err);
+        log(`Failed to stop codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to stop codespace: ${err.message}`);
       }
     })
@@ -164,16 +205,16 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.openSshTerminal', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Open SSH Terminal');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.openSshTerminal(item.codespace);
+        await codespaceManager.openSshTerminal(codespace);
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to open SSH terminal for codespace ${item.codespace.name}`, err);
+        log(`Failed to open SSH terminal for codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to open SSH terminal: ${err.message}`);
       }
     })
@@ -181,17 +222,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.rebuild', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Rebuild Codespace');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.rebuild(item.codespace, false);
+        await codespaceManager.rebuild(codespace, false);
         treeProvider.refresh();
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to rebuild codespace ${item.codespace.name}`, err);
+        log(`Failed to rebuild codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
       }
     })
@@ -199,17 +240,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.rebuildFull', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Full Rebuild Codespace');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.rebuild(item.codespace, true);
+        await codespaceManager.rebuild(codespace, true);
         treeProvider.refresh();
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to full rebuild codespace ${item.codespace.name}`, err);
+        log(`Failed to full rebuild codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
       }
     })
@@ -217,17 +258,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.delete', async (item?: CodespaceTreeItem) => {
-      if (!item?.codespace) {
-        void vscode.window.showErrorMessage('No codespace selected');
+      const codespace = item?.codespace ?? await pickCodespace('Delete Codespace');
+      if (!codespace) {
         return;
       }
 
       try {
-        await codespaceManager.deleteCodespace(item.codespace);
+        await codespaceManager.deleteCodespace(codespace);
         treeProvider.refresh();
       } catch (error) {
         const err = ensureError(error);
-        log(`Failed to delete codespace ${item.codespace.name}`, err);
+        log(`Failed to delete codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to delete codespace: ${err.message}`);
       }
     })

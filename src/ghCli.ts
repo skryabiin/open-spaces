@@ -322,11 +322,11 @@ interface CodespaceViewResponse {
 /**
  * Gets the idle timeout information for a codespace.
  * @param codespaceName - The name of the codespace
- * @returns Object with idleTimeoutMinutes and lastUsedAt, or null if not available
+ * @returns Object with idleTimeoutMinutes and optionally lastUsedAt, or null if not available
  */
 export async function getCodespaceIdleTimeout(
   codespaceName: string
-): Promise<{ idleTimeoutMinutes: number; lastUsedAt: string } | null> {
+): Promise<{ idleTimeoutMinutes: number; lastUsedAt?: string } | null> {
   validateCodespaceName(codespaceName);
   try {
     const result = await runGh(
@@ -340,13 +340,13 @@ export async function getCodespaceIdleTimeout(
     }
 
     const response = data as CodespaceViewResponse;
-    if (typeof response.idleTimeoutMinutes !== 'number' || !response.lastUsedAt) {
+    if (typeof response.idleTimeoutMinutes !== 'number') {
       return null;
     }
 
     return {
       idleTimeoutMinutes: response.idleTimeoutMinutes,
-      lastUsedAt: response.lastUsedAt,
+      lastUsedAt: response.lastUsedAt || undefined,
     };
   } catch {
     return null;
@@ -440,26 +440,6 @@ export interface Repository {
   description: string;
   isPrivate: boolean;
   pushedAt?: string;
-}
-
-interface RepoListResponse {
-  nameWithOwner?: string;
-  description?: string;
-  isPrivate?: boolean;
-  pushedAt?: string;
-}
-
-function isRepoListResponse(data: unknown): data is RepoListResponse[] {
-  return (
-    Array.isArray(data) &&
-    data.every((item): item is RepoListResponse => {
-      if (typeof item !== 'object' || item === null) {
-        return false;
-      }
-      const obj = item as Record<string, unknown>;
-      return 'nameWithOwner' in obj && typeof obj.nameWithOwner === 'string';
-    })
-  );
 }
 
 /**
