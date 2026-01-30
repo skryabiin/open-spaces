@@ -105,6 +105,10 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       );
       if (idleInfo) {
         md.appendMarkdown(`- ${idleInfo.text}\n`);
+      } else {
+        const mins = this.codespace.idleTimeoutMinutes;
+        const text = mins >= 60 ? `Idle timeout: ${Math.floor(mins / 60)}h` : `Idle timeout: ${mins}m`;
+        md.appendMarkdown(`- ${text}\n`);
       }
     }
     return md;
@@ -192,6 +196,11 @@ export class CodespaceTreeItem extends vscode.TreeItem {
             idleInfo.isLow ? new vscode.ThemeColor('editorWarning.foreground') : undefined
           )
         );
+      } else {
+        // Fallback: show idle timeout value without countdown
+        const mins = this.codespace.idleTimeoutMinutes;
+        const text = mins >= 60 ? `Idle timeout: ${Math.floor(mins / 60)}h` : `Idle timeout: ${mins}m`;
+        children.push(new CodespaceDetailItem('watch', text, 'idleTimeout'));
       }
     }
 
