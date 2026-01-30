@@ -141,7 +141,7 @@ export async function connect(codespace: Codespace): Promise<void> {
   }
 
   // Write to SSH config
-  sshConfigManager.addOrUpdateEntry(entry);
+  sshConfigManager.setEntry(entry);
 
   // Refresh open-remote-ssh if available
   await vscode.commands.executeCommand('remote-ssh.refreshHosts').then(

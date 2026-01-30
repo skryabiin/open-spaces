@@ -216,41 +216,19 @@ export function updateManagedSection(newEntries: SshConfigEntry[]): void {
 }
 
 /**
- * Gets all SSH config entries from the managed section.
- * @returns Array of SSH config entries managed by this extension
+ * Sets the SSH config entry in the managed section.
+ * Only keeps a single entry to avoid accumulating stale configs.
+ * @param entry - The SSH config entry to set
  */
-export function getManagedEntries(): SshConfigEntry[] {
-  const config = readSshConfig();
-
-  const markerStartIndex = config.indexOf(MARKER_START);
-  const markerEndIndex = config.indexOf(MARKER_END);
-
-  if (markerStartIndex === -1 || markerEndIndex === -1) {
-    return [];
-  }
-
-  const managedSection = config.substring(markerStartIndex + MARKER_START.length, markerEndIndex);
-  return parseSshConfigOutput(managedSection);
+export function setEntry(entry: SshConfigEntry): void {
+  updateManagedSection([entry]);
 }
 
 /**
- * Adds or updates an SSH config entry in the managed section.
- * @param entry - The SSH config entry to add or update
+ * Clears all SSH config entries from the managed section.
  */
-export function addOrUpdateEntry(entry: SshConfigEntry): void {
-  const existingEntries = getManagedEntries();
-  const otherEntries = existingEntries.filter((e) => e.host !== entry.host);
-  updateManagedSection([...otherEntries, entry]);
-}
-
-/**
- * Removes an SSH config entry from the managed section.
- * @param host - The host name of the entry to remove
- */
-export function removeEntry(host: string): void {
-  const existingEntries = getManagedEntries();
-  const filteredEntries = existingEntries.filter((e) => e.host !== host);
-  updateManagedSection(filteredEntries);
+export function clearEntries(): void {
+  updateManagedSection([]);
 }
 
 /**
@@ -264,12 +242,3 @@ export function identityFileExists(identityFile: string): boolean {
   return fs.existsSync(expandedPath);
 }
 
-/**
- * Gets the SSH host name for a codespace.
- * @param codespaceName - The name of the codespace
- * @returns The SSH host name in the format used by gh CLI
- */
-export function getSshHostForCodespace(codespaceName: string): string {
-  // The host name format used by gh codespace ssh --config
-  return `cs.${codespaceName}.main`;
-}
