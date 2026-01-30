@@ -463,100 +463,40 @@ function isRepoListResponse(data: unknown): data is RepoListResponse[] {
 }
 
 /**
- * Lists repositories the user can create codespaces for.
- * Shows repos from user's recent push events first, then remaining org/user repos.
- * @returns Array of Repository objects
+ * Lists repositories the user has recently pushed to.
+ * Uses the Events API with pagination to get more history.
+ * @returns Array of Repository objects sorted by most recent push
  */
 export async function listRepositories(): Promise<Repository[]> {
   const repos: Repository[] = [];
   const seenRepos = new Set<string>();
 
-  // Get current user's login and recent push events
-  try {
-    const userResult = await runGh(['api', '/user', '-q', '.login'], 10000);
-    const username = userResult.stdout.trim();
+  // Get current user's login
+  const userResult = await runGh(['api', '/user', '-q', '.login'], 10000);
+  const username = userResult.stdout.trim();
 
-    if (username) {
-      const eventsResult = await runGh(
-        ['api', `/users/${username}/events`, '-q', '.[] | select(.type == "PushEvent") | .repo.name'],
-        30000
-      );
-
-      const repoNames = eventsResult.stdout.trim().split('\n').filter(Boolean);
-
-      // Add recently pushed repos first (dedupe, preserving order)
-      for (const name of repoNames) {
-        if (!seenRepos.has(name)) {
-          seenRepos.add(name);
-          repos.push({
-            nameWithOwner: name,
-            description: '',
-            isPrivate: true,
-          });
-        }
-      }
-    }
-  } catch {
-    // Continue to org/user repos
+  if (!username) {
+    throw new GhCliError('NOT_AUTHENTICATED', 'Could not get current user');
   }
 
-  // Add org repos
-  try {
-    const orgsResult = await runGh(['api', '/user/orgs', '-q', '.[].login'], 30000);
-    const orgLogins = orgsResult.stdout.trim().split('\n').filter(Boolean);
+  // Get push events with pagination to go further back in time
+  const eventsResult = await runGh(
+    ['api', `/users/${username}/events`, '--paginate', '-q', '.[] | select(.type == "PushEvent") | .repo.name'],
+    60000
+  );
 
-    for (const org of orgLogins) {
-      try {
-        const result = await runGh(
-          ['repo', 'list', org, '--json', 'nameWithOwner,description,isPrivate', '--limit', '9999'],
-          120000
-        );
+  const repoNames = eventsResult.stdout.trim().split('\n').filter(Boolean);
 
-        const data: unknown = JSON.parse(result.stdout);
-        if (isRepoListResponse(data)) {
-          for (const repo of data) {
-            const name = repo.nameWithOwner || '';
-            if (!seenRepos.has(name)) {
-              seenRepos.add(name);
-              repos.push({
-                nameWithOwner: name,
-                description: repo.description || '',
-                isPrivate: repo.isPrivate || false,
-              });
-            }
-          }
-        }
-      } catch {
-        // Skip orgs that fail (e.g., no access)
-      }
+  // Add repos in order of most recent push (dedupe, preserving order)
+  for (const name of repoNames) {
+    if (!seenRepos.has(name)) {
+      seenRepos.add(name);
+      repos.push({
+        nameWithOwner: name,
+        description: '',
+        isPrivate: true,
+      });
     }
-  } catch {
-    // Ignore org errors
-  }
-
-  // Add user's own repos
-  try {
-    const userReposResult = await runGh(
-      ['repo', 'list', '--json', 'nameWithOwner,description,isPrivate', '--limit', '9999'],
-      30000
-    );
-
-    const userData: unknown = JSON.parse(userReposResult.stdout);
-    if (isRepoListResponse(userData)) {
-      for (const repo of userData) {
-        const name = repo.nameWithOwner || '';
-        if (!seenRepos.has(name)) {
-          seenRepos.add(name);
-          repos.push({
-            nameWithOwner: name,
-            description: repo.description || '',
-            isPrivate: repo.isPrivate || false,
-          });
-        }
-      }
-    }
-  } catch {
-    // Ignore - user may not have personal repos (EMU)
   }
 
   return repos;
@@ -682,18 +622,13 @@ export interface CreateCodespaceOptions {
   displayName?: string;
 }
 
-interface CreateCodespaceResponse {
-  name?: string;
-  state?: string;
-}
-
 /**
  * Creates a new codespace.
  * @param options - Options for creating the codespace
  * @returns The name of the created codespace
  */
 export async function createCodespace(options: CreateCodespaceOptions): Promise<string> {
-  const args = ['codespace', 'create', '--repo', options.repo, '--json', 'name,state'];
+  const args = ['codespace', 'create', '--repo', options.repo];
 
   if (options.branch) {
     args.push('--branch', options.branch);
@@ -711,20 +646,10 @@ export async function createCodespace(options: CreateCodespaceOptions): Promise<
   // Creating a codespace can take a while
   const result = await runGh(args, 300000);
 
-  try {
-    const data: unknown = JSON.parse(result.stdout);
-    if (typeof data !== 'object' || data === null || !('name' in data)) {
-      throw new GhCliError('PARSE_ERROR', 'Invalid create codespace response');
-    }
-    const response = data as CreateCodespaceResponse;
-    if (!response.name) {
-      throw new GhCliError('PARSE_ERROR', 'No codespace name in response');
-    }
-    return response.name;
-  } catch (error) {
-    if (error instanceof GhCliError) {
-      throw error;
-    }
-    throw new GhCliError('PARSE_ERROR', 'Failed to parse create codespace output');
+  // gh codespace create outputs the codespace name directly
+  const codespaceName = result.stdout.trim();
+  if (!codespaceName) {
+    throw new GhCliError('PARSE_ERROR', 'No codespace name in response');
   }
+  return codespaceName;
 }

@@ -324,19 +324,22 @@ export async function createCodespace(): Promise<string | undefined> {
     }
   );
 
-  if (repos.length === 0) {
-    void vscode.window.showWarningMessage('No repositories found');
-    return undefined;
-  }
-
   const repoItems: vscode.QuickPickItem[] = repos.map((repo) => ({
     label: repo.nameWithOwner,
     description: repo.isPrivate ? '$(lock) Private' : '$(globe) Public',
     detail: repo.description || undefined,
   }));
 
+  // Add option to enter repository manually
+  repoItems.push({
+    label: '$(edit) Enter repository manually...',
+    description: '',
+    detail: 'Type owner/repo to use a repository not in the list',
+    alwaysShow: true,
+  });
+
   const selectedRepo = await vscode.window.showQuickPick(repoItems, {
-    placeHolder: 'Select a repository',
+    placeHolder: 'Select a repository or enter manually',
     title: 'Create Codespace - Select Repository',
   });
 
@@ -344,7 +347,27 @@ export async function createCodespace(): Promise<string | undefined> {
     return undefined;
   }
 
-  const repo = selectedRepo.label;
+  let repo: string;
+  if (selectedRepo.label === '$(edit) Enter repository manually...') {
+    const manualRepo = await vscode.window.showInputBox({
+      prompt: 'Enter the repository (owner/repo)',
+      placeHolder: 'owner/repo',
+      title: 'Create Codespace - Enter Repository',
+      validateInput: (value) => {
+        if (!value || !value.includes('/')) {
+          return 'Please enter in format: owner/repo';
+        }
+        return undefined;
+      },
+    });
+
+    if (!manualRepo) {
+      return undefined;
+    }
+    repo = manualRepo;
+  } else {
+    repo = selectedRepo.label;
+  }
 
   // Step 2: Select branch
   let branches: ghCli.Branch[] = [];
