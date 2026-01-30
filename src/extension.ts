@@ -9,6 +9,16 @@ import { Codespace } from './types';
 let treeProvider: CodespaceTreeProvider;
 let outputChannel: vscode.OutputChannel;
 
+// Auth polling state (module-level for cleanup in deactivate)
+let authPollingInterval: NodeJS.Timeout | null = null;
+
+function stopAuthPolling(): void {
+  if (authPollingInterval) {
+    clearInterval(authPollingInterval);
+    authPollingInterval = null;
+  }
+}
+
 /**
  * Logs a message to the Open Spaces output channel.
  * @param message - The message to log
@@ -220,30 +230,27 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Track active auth terminals and poll for auth completion
   const activeAuthTerminals = new Set<vscode.Terminal>();
-  let authPollingInterval: NodeJS.Timeout | null = null;
+  let wasAuthenticated = false;
 
   function startAuthPolling(): void {
     if (authPollingInterval) {
       return;
     }
+    // Capture current auth state before polling
+    wasAuthenticated = false;
     authPollingInterval = setInterval(() => {
       void (async () => {
         const authResult = await ghCli.checkAuth();
-        if (authResult.authenticated && authResult.hasCodespaceScope) {
-          // Auth succeeded - refresh and stop polling
+        const isAuthenticated = authResult.authenticated && authResult.hasCodespaceScope;
+        if (isAuthenticated && !wasAuthenticated) {
+          // Auth state changed from not authenticated to authenticated - refresh
           treeProvider.refresh();
           stopAuthPolling();
           activeAuthTerminals.clear();
         }
+        wasAuthenticated = isAuthenticated;
       })();
     }, 2000);
-  }
-
-  function stopAuthPolling(): void {
-    if (authPollingInterval) {
-      clearInterval(authPollingInterval);
-      authPollingInterval = null;
-    }
   }
 
   context.subscriptions.push(
@@ -387,6 +394,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  stopAuthPolling();
   if (treeProvider) {
     treeProvider.dispose();
   }
