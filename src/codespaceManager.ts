@@ -10,6 +10,7 @@ export interface PrerequisiteResult {
   ready: boolean;
   ghInstalled: boolean;
   authenticated: boolean;
+  hasCodespaceScope: boolean;
   error?: GhCliError;
 }
 
@@ -25,6 +26,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
       ready: false,
       ghInstalled: false,
       authenticated: false,
+      hasCodespaceScope: false,
       error: new GhCliError('NOT_INSTALLED', vscode.l10n.t('GitHub CLI (gh) is not installed')),
     };
   }
@@ -36,6 +38,18 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
       ready: false,
       ghInstalled: true,
       authenticated: false,
+      hasCodespaceScope: false,
+      error: authResult.error,
+    };
+  }
+
+  // Check if codespace scope is present
+  if (!authResult.hasCodespaceScope) {
+    return {
+      ready: false,
+      ghInstalled: true,
+      authenticated: true,
+      hasCodespaceScope: false,
       error: authResult.error,
     };
   }
@@ -44,7 +58,35 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
     ready: true,
     ghInstalled: true,
     authenticated: true,
+    hasCodespaceScope: true,
   };
+}
+
+/**
+ * Polls briefly until the codespace state changes from its original state.
+ * Used to ensure the UI can reflect transitional states.
+ */
+async function waitForStateChange(
+  codespaceName: string,
+  originalState: string,
+  maxWaitMs = 10000,
+  pollIntervalMs = 500
+): Promise<void> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitMs) {
+    const current = await ghCli.getCodespace(codespaceName);
+    if (current && current.state !== originalState) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
+
+/**
+ * Triggers a refresh of the codespaces tree view.
+ */
+function triggerRefresh(): void {
+  void vscode.commands.executeCommand('openSpaces.refresh');
 }
 
 /**
@@ -87,6 +129,9 @@ async function ensureCodespaceAvailable(codespace: Codespace): Promise<Codespace
       async () => {
         if (freshCodespace.state === 'Shutdown') {
           await ghCli.startCodespace(codespace.name);
+          // Wait for transitional state and refresh UI to show 'Starting'
+          await waitForStateChange(codespace.name, 'Shutdown');
+          triggerRefresh();
         }
         await ghCli.waitForState(codespace.name, 'Available');
       }
@@ -182,6 +227,9 @@ export async function start(codespace: Codespace): Promise<void> {
     },
     async () => {
       await ghCli.startCodespace(codespace.name);
+      // Wait for transitional state and refresh UI to show 'Starting'
+      await waitForStateChange(codespace.name, 'Shutdown');
+      triggerRefresh();
       await ghCli.waitForState(codespace.name, 'Available');
     }
   );
@@ -207,6 +255,9 @@ export async function stop(codespace: Codespace): Promise<void> {
     },
     async () => {
       await ghCli.stopCodespace(codespace.name);
+      // Wait for transitional state and refresh UI to show 'ShuttingDown'
+      await waitForStateChange(codespace.name, 'Available');
+      triggerRefresh();
       await ghCli.waitForState(codespace.name, 'Shutdown');
     }
   );
@@ -216,13 +267,28 @@ export async function stop(codespace: Codespace): Promise<void> {
 
 /**
  * Opens a terminal with the gh auth login command pre-filled.
+ * @returns The created terminal
  */
-export function openAuthTerminal(): void {
+export function openAuthTerminal(): vscode.Terminal {
   const terminal = vscode.window.createTerminal({
     name: 'GitHub CLI Auth',
   });
   terminal.show();
   terminal.sendText('gh auth login --scopes codespace');
+  return terminal;
+}
+
+/**
+ * Opens a terminal to add the codespace scope to an existing auth token.
+ * @returns The created terminal
+ */
+export function openScopeRefreshTerminal(): vscode.Terminal {
+  const terminal = vscode.window.createTerminal({
+    name: 'Add Codespace Scope',
+  });
+  terminal.show();
+  terminal.sendText('gh auth refresh --scopes codespace');
+  return terminal;
 }
 
 /**
@@ -269,7 +335,10 @@ export async function rebuild(codespace: Codespace, full = false): Promise<void>
       cancellable: false,
     },
     async () => {
+      const originalState = codespace.state;
       await ghCli.rebuildCodespace(codespace.name, full);
+      // Wait for transitional state so the UI can reflect the change
+      await waitForStateChange(codespace.name, originalState);
     }
   );
 

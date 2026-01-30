@@ -218,9 +218,61 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Track active auth terminals and poll for auth completion
+  const activeAuthTerminals = new Set<vscode.Terminal>();
+  let authPollingInterval: NodeJS.Timeout | null = null;
+
+  function startAuthPolling(): void {
+    if (authPollingInterval) {
+      return;
+    }
+    authPollingInterval = setInterval(() => {
+      void (async () => {
+        const authResult = await ghCli.checkAuth();
+        if (authResult.authenticated && authResult.hasCodespaceScope) {
+          // Auth succeeded - refresh and stop polling
+          treeProvider.refresh();
+          stopAuthPolling();
+          activeAuthTerminals.clear();
+        }
+      })();
+    }, 2000);
+  }
+
+  function stopAuthPolling(): void {
+    if (authPollingInterval) {
+      clearInterval(authPollingInterval);
+      authPollingInterval = null;
+    }
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.openAuthTerminal', () => {
-      void codespaceManager.openAuthTerminal();
+      const terminal = codespaceManager.openAuthTerminal();
+      activeAuthTerminals.add(terminal);
+      startAuthPolling();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.addCodespaceScope', () => {
+      const terminal = codespaceManager.openScopeRefreshTerminal();
+      activeAuthTerminals.add(terminal);
+      startAuthPolling();
+    })
+  );
+
+  // Clean up auth polling when terminals close
+  context.subscriptions.push(
+    vscode.window.onDidCloseTerminal((closedTerminal) => {
+      if (activeAuthTerminals.has(closedTerminal)) {
+        activeAuthTerminals.delete(closedTerminal);
+        if (activeAuthTerminals.size === 0) {
+          stopAuthPolling();
+          // Final refresh in case auth completed just before close
+          setTimeout(() => treeProvider.refresh(), 500);
+        }
+      }
     })
   );
 
