@@ -62,7 +62,8 @@
   "{0} cores, {1} RAM, {2} storage": "{0} cores, {1} RAM, {2} storage",
   "Select a machine type": "Select a machine type",
   "Create Codespace - Select Machine Type": "Create Codespace - Select Machine Type",
-  "Enter a display name for the codespace (optional)": "Enter a display name for the codespace (optional)",
+  "Enter a display name for the codespace": "Enter a display name for the codespace",
+  "Generated if left blank": "Generated if left blank",
   "Create Codespace - Display Name": "Create Codespace - Display Name",
   "Creating codespace for {0}...": "Creating codespace for {0}...",
   "Codespace created: {0}": "Codespace created: {0}",
@@ -140,5 +141,9 @@
   "$(circle-filled) Running": "$(circle-filled) Running",
   "$(circle-outline) Stopped": "$(circle-outline) Stopped",
   "$(sync~spin) Starting": "$(sync~spin) Starting",
-  "$(sync~spin) Stopping": "$(sync~spin) Stopping"
+  "$(sync~spin) Stopping": "$(sync~spin) Stopping",
+  "Codespace scope required": "Codespace scope required",
+  "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.",
+  "Click to add scope": "Click to add scope",
+  "Add Scope": "Add Scope"
 }
