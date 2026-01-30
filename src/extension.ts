@@ -231,6 +231,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Track active auth terminals and poll for auth completion
   const activeAuthTerminals = new Set<vscode.Terminal>();
   let wasAuthenticated = false;
+  let authPollingStartTime: number | null = null;
+  const AUTH_POLLING_TIMEOUT_MS = 60000; // 1 minute max
 
   function startAuthPolling(): void {
     if (authPollingInterval) {
@@ -238,8 +240,15 @@ export function activate(context: vscode.ExtensionContext) {
     }
     // Capture current auth state before polling
     wasAuthenticated = false;
+    authPollingStartTime = Date.now();
     authPollingInterval = setInterval(() => {
       void (async () => {
+        // Stop polling after 1 minute
+        if (authPollingStartTime && Date.now() - authPollingStartTime > AUTH_POLLING_TIMEOUT_MS) {
+          stopAuthPolling();
+          activeAuthTerminals.clear();
+          return;
+        }
         const authResult = await ghCli.checkAuth();
         const isAuthenticated = authResult.authenticated && authResult.hasCodespaceScope;
         if (isAuthenticated && !wasAuthenticated) {
