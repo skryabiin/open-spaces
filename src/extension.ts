@@ -27,27 +27,48 @@ export function log(message: string, error?: Error): void {
 
 function getStateLabel(state: string): string {
   switch (state) {
-    case 'Available': return '$(circle-filled) Running';
-    case 'Shutdown': return '$(circle-outline) Stopped';
-    case 'Starting': return '$(sync~spin) Starting';
-    case 'ShuttingDown': return '$(sync~spin) Stopping';
+    case 'Available': return vscode.l10n.t('$(circle-filled) Running');
+    case 'Shutdown': return vscode.l10n.t('$(circle-outline) Stopped');
+    case 'Starting': return vscode.l10n.t('$(sync~spin) Starting');
+    case 'ShuttingDown': return vscode.l10n.t('$(sync~spin) Stopping');
     default: return state;
   }
 }
 
-async function pickCodespace(title: string): Promise<Codespace | undefined> {
-  const codespaces = await vscode.window.withProgress(
+interface PickCodespaceOptions {
+  title: string;
+  stateFilter?: 'running' | 'stopped';
+}
+
+async function pickCodespace(options: PickCodespaceOptions): Promise<Codespace | undefined> {
+  const allCodespaces = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Loading codespaces...',
+      title: vscode.l10n.t('Loading codespaces...'),
       cancellable: false,
     },
     () => ghCli.listCodespaces()
   );
 
-  if (codespaces.length === 0) {
-    void vscode.window.showInformationMessage('No codespaces found');
+  if (allCodespaces.length === 0) {
+    void vscode.window.showInformationMessage(vscode.l10n.t('No codespaces found'));
     return undefined;
+  }
+
+  // Filter codespaces based on state if specified
+  let codespaces = allCodespaces;
+  if (options.stateFilter === 'running') {
+    codespaces = allCodespaces.filter((cs) => cs.state === 'Available');
+    if (codespaces.length === 0) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('No running codespaces found'));
+      return undefined;
+    }
+  } else if (options.stateFilter === 'stopped') {
+    codespaces = allCodespaces.filter((cs) => cs.state === 'Shutdown');
+    if (codespaces.length === 0) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('No stopped codespaces found'));
+      return undefined;
+    }
   }
 
   const items = codespaces.map((cs) => ({
@@ -58,8 +79,8 @@ async function pickCodespace(title: string): Promise<Codespace | undefined> {
   }));
 
   const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Select a codespace',
-    title,
+    placeHolder: vscode.l10n.t('Select a codespace'),
+    title: options.title,
   });
 
   return selected?.codespace;
@@ -90,10 +111,10 @@ export function activate(context: vscode.ExtensionContext) {
   const remoteSshExtension = vscode.extensions.getExtension('jeanp413.open-remote-ssh');
   if (!remoteSshExtension) {
     void vscode.window.showWarningMessage(
-      'Open Remote - SSH extension is required to connect to codespaces.',
-      'Install Extension'
+      vscode.l10n.t('Open Remote - SSH extension is required to connect to codespaces.'),
+      vscode.l10n.t('Install Extension')
     ).then(selection => {
-      if (selection === 'Install Extension') {
+      if (selection === vscode.l10n.t('Install Extension')) {
         void vscode.env.openExternal(vscode.Uri.parse('vscode:extension/jeanp413.open-remote-ssh'));
       }
     });
@@ -103,10 +124,10 @@ export function activate(context: vscode.ExtensionContext) {
   void ghCli.checkInstalled().then(installed => {
     if (!installed) {
       void vscode.window.showErrorMessage(
-        'GitHub CLI (gh) is not installed. Install it to use this extension.',
-        'Get GitHub CLI'
+        vscode.l10n.t('GitHub CLI (gh) is not installed. Install it to use this extension.'),
+        vscode.l10n.t('Get GitHub CLI')
       ).then(selection => {
-        if (selection === 'Get GitHub CLI') {
+        if (selection === vscode.l10n.t('Get GitHub CLI')) {
           void vscode.env.openExternal(vscode.Uri.parse('https://cli.github.com/'));
         }
       });
@@ -146,7 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.connect', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Connect to Codespace');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Connect to Codespace') });
       if (!codespace) {
         return;
       }
@@ -156,14 +177,14 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to connect to codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to connect: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', err.message));
       }
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.start', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Start Codespace');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Start Codespace'), stateFilter: 'stopped' });
       if (!codespace) {
         return;
       }
@@ -174,14 +195,14 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to start codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to start codespace: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to start codespace: {0}', err.message));
       }
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.stop', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Stop Codespace');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Stop Codespace'), stateFilter: 'running' });
       if (!codespace) {
         return;
       }
@@ -192,7 +213,7 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to stop codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to stop codespace: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to stop codespace: {0}', err.message));
       }
     })
   );
@@ -205,7 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.openSshTerminal', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Open SSH Terminal');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Open SSH Terminal') });
       if (!codespace) {
         return;
       }
@@ -215,14 +236,14 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to open SSH terminal for codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to open SSH terminal: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to open SSH terminal: {0}', err.message));
       }
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.rebuild', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Rebuild Codespace');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Rebuild Codespace') });
       if (!codespace) {
         return;
       }
@@ -233,14 +254,14 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to rebuild codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to rebuild codespace: {0}', err.message));
       }
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.rebuildFull', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Full Rebuild Codespace');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Full Rebuild Codespace') });
       if (!codespace) {
         return;
       }
@@ -251,14 +272,14 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to full rebuild codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to rebuild codespace: {0}', err.message));
       }
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.delete', async (item?: CodespaceTreeItem) => {
-      const codespace = item?.codespace ?? await pickCodespace('Delete Codespace');
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Delete Codespace') });
       if (!codespace) {
         return;
       }
@@ -269,7 +290,7 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log(`Failed to delete codespace ${codespace.name}`, err);
-        void vscode.window.showErrorMessage(`Failed to delete codespace: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to delete codespace: {0}', err.message));
       }
     })
   );
@@ -278,16 +299,16 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('openSpaces.disconnect', async () => {
       const codespaceName = getCodespaceName();
       const message = codespaceName
-        ? `Disconnect from codespace ${codespaceName}?`
-        : 'Disconnect from remote?';
+        ? vscode.l10n.t('Disconnect from codespace {0}?', codespaceName)
+        : vscode.l10n.t('Disconnect from remote?');
 
       const confirmed = await vscode.window.showWarningMessage(
         message,
         { modal: true },
-        'Disconnect'
+        vscode.l10n.t('Disconnect')
       );
 
-      if (confirmed === 'Disconnect') {
+      if (confirmed === vscode.l10n.t('Disconnect')) {
         // Close the remote connection
         await vscode.commands.executeCommand('workbench.action.remote.close');
       }
@@ -304,7 +325,7 @@ export function activate(context: vscode.ExtensionContext) {
       } catch (error) {
         const err = ensureError(error);
         log('Failed to create codespace', err);
-        void vscode.window.showErrorMessage(`Failed to create codespace: ${err.message}`);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to create codespace: {0}', err.message));
       }
     })
   );

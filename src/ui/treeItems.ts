@@ -27,27 +27,27 @@ function getStateIcon(state: CodespaceState): vscode.ThemeIcon {
 function getStateDescription(state: CodespaceState): string {
   switch (state) {
     case 'Available':
-      return 'Running';
+      return vscode.l10n.t('Running');
     case 'Shutdown':
-      return 'Stopped';
+      return vscode.l10n.t('Stopped');
     case 'Starting':
-      return 'Starting...';
+      return vscode.l10n.t('Starting...');
     case 'ShuttingDown':
-      return 'Stopping...';
+      return vscode.l10n.t('Stopping...');
     case 'Provisioning':
-      return 'Provisioning...';
+      return vscode.l10n.t('Provisioning...');
     case 'Rebuilding':
-      return 'Rebuilding...';
+      return vscode.l10n.t('Rebuilding...');
     case 'Awaiting':
-      return 'Awaiting...';
+      return vscode.l10n.t('Awaiting...');
     case 'Unavailable':
-      return 'Unavailable';
+      return vscode.l10n.t('Unavailable');
     case 'Failed':
-      return 'Failed';
+      return vscode.l10n.t('Failed');
     case 'Exporting':
-      return 'Exporting...';
+      return vscode.l10n.t('Exporting...');
     case 'Updating':
-      return 'Updating...';
+      return vscode.l10n.t('Updating...');
     default:
       return state;
   }
@@ -62,7 +62,9 @@ export class RepositoryTreeItem extends vscode.TreeItem {
 
     this.iconPath = new vscode.ThemeIcon('repo');
     this.contextValue = 'repository';
-    this.description = `${codespaces.length} codespace${codespaces.length !== 1 ? 's' : ''}`;
+    this.description = codespaces.length === 1
+      ? vscode.l10n.t('{0} codespace', codespaces.length)
+      : vscode.l10n.t('{0} codespaces', codespaces.length);
   }
 
   getChildren(): CodespaceTreeItem[] {
@@ -83,20 +85,20 @@ export class CodespaceTreeItem extends vscode.TreeItem {
   private createTooltip(): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.appendMarkdown(`**${this.codespace.displayName}**\n\n`);
-    md.appendMarkdown(`- Repository: ${this.codespace.repository}\n`);
-    md.appendMarkdown(`- Branch: ${this.codespace.branch || 'N/A'}\n`);
-    md.appendMarkdown(`- State: ${this.codespace.state}\n`);
+    md.appendMarkdown(`- ${vscode.l10n.t('Repository: {0}', this.codespace.repository)}\n`);
+    md.appendMarkdown(`- ${vscode.l10n.t('Branch: {0}', this.codespace.branch || vscode.l10n.t('N/A'))}\n`);
+    md.appendMarkdown(`- ${vscode.l10n.t('State: {0}', this.codespace.state)}\n`);
     if (this.codespace.machineInfo) {
-      md.appendMarkdown(`- Machine: ${formatMachineSpecs(this.codespace.machineInfo)}\n`);
+      md.appendMarkdown(`- ${vscode.l10n.t('Machine: {0}', formatMachineSpecs(this.codespace.machineInfo))}\n`);
       if (this.codespace.machineInfo.storageInBytes > 0) {
-        md.appendMarkdown(`- Storage: ${formatBytes(this.codespace.machineInfo.storageInBytes)}\n`);
+        md.appendMarkdown(`- ${vscode.l10n.t('Storage: {0}', formatBytes(this.codespace.machineInfo.storageInBytes))}\n`);
       }
     } else {
-      md.appendMarkdown(`- Machine: ${this.codespace.machineName || 'N/A'}\n`);
+      md.appendMarkdown(`- ${vscode.l10n.t('Machine: {0}', this.codespace.machineName || vscode.l10n.t('N/A'))}\n`);
     }
     if (this.codespace.lastUsedAt) {
       const lastUsed = new Date(this.codespace.lastUsedAt);
-      md.appendMarkdown(`- Last used: ${lastUsed.toLocaleString()}\n`);
+      md.appendMarkdown(`- ${vscode.l10n.t('Last used: {0}', lastUsed.toLocaleString())}\n`);
     }
     if (this.codespace.state === 'Available' && this.codespace.idleTimeoutMinutes) {
       const idleInfo = getIdleTimeRemaining(
@@ -107,7 +109,9 @@ export class CodespaceTreeItem extends vscode.TreeItem {
         md.appendMarkdown(`- ${idleInfo.text}\n`);
       } else {
         const mins = this.codespace.idleTimeoutMinutes;
-        const text = mins >= 60 ? `Idle timeout: ${Math.floor(mins / 60)}h` : `Idle timeout: ${mins}m`;
+        const text = mins >= 60
+          ? vscode.l10n.t('Idle timeout: {0}h', Math.floor(mins / 60))
+          : vscode.l10n.t('Idle timeout: {0}m', mins);
         md.appendMarkdown(`- ${text}\n`);
       }
     }
@@ -129,16 +133,16 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       const statusParts: string[] = [];
 
       if (gitStatus.hasUncommittedChanges) {
-        statusParts.push('uncommitted changes');
+        statusParts.push(vscode.l10n.t('uncommitted changes'));
       }
       if (gitStatus.hasUnpushedChanges) {
-        statusParts.push('unpushed commits');
+        statusParts.push(vscode.l10n.t('unpushed commits'));
       }
       if (gitStatus.ahead > 0) {
-        statusParts.push(`${gitStatus.ahead} ahead`);
+        statusParts.push(vscode.l10n.t('{0} ahead', gitStatus.ahead));
       }
       if (gitStatus.behind > 0) {
-        statusParts.push(`${gitStatus.behind} behind`);
+        statusParts.push(vscode.l10n.t('{0} behind', gitStatus.behind));
       }
 
       if (statusParts.length > 0) {
@@ -151,7 +155,7 @@ export class CodespaceTreeItem extends vscode.TreeItem {
           )
         );
       } else {
-        children.push(new CodespaceDetailItem('check', 'No pending changes', 'gitStatus'));
+        children.push(new CodespaceDetailItem('check', vscode.l10n.t('No pending changes'), 'gitStatus'));
       }
     }
 
@@ -164,14 +168,14 @@ export class CodespaceTreeItem extends vscode.TreeItem {
         children.push(
           new CodespaceDetailItem(
             'database',
-            `${formatBytes(this.codespace.machineInfo.storageInBytes)} storage`,
+            vscode.l10n.t('{0} storage', formatBytes(this.codespace.machineInfo.storageInBytes)),
             'storage'
           )
         );
       }
     } else {
       children.push(
-        new CodespaceDetailItem('server-environment', this.codespace.machineName || 'Unknown', 'machine')
+        new CodespaceDetailItem('server-environment', this.codespace.machineName || vscode.l10n.t('Unknown'), 'machine')
       );
     }
 
@@ -199,7 +203,9 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       } else {
         // Fallback: show idle timeout value without countdown
         const mins = this.codespace.idleTimeoutMinutes;
-        const text = mins >= 60 ? `Idle timeout: ${Math.floor(mins / 60)}h` : `Idle timeout: ${mins}m`;
+        const text = mins >= 60
+          ? vscode.l10n.t('Idle timeout: {0}h', Math.floor(mins / 60))
+          : vscode.l10n.t('Idle timeout: {0}m', mins);
         children.push(new CodespaceDetailItem('watch', text, 'idleTimeout'));
       }
     }
@@ -223,27 +229,27 @@ export class CodespaceDetailItem extends vscode.TreeItem {
 
 export class GhNotInstalledTreeItem extends vscode.TreeItem {
   constructor() {
-    super('GitHub CLI not installed', vscode.TreeItemCollapsibleState.None);
+    super(vscode.l10n.t('GitHub CLI not installed'), vscode.TreeItemCollapsibleState.None);
 
     this.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
     this.tooltip = new vscode.MarkdownString(
-      'GitHub CLI (gh) is required.\n\nInstall from: https://cli.github.com/'
+      vscode.l10n.t('GitHub CLI (gh) is required.\n\nInstall from: https://cli.github.com/')
     );
     this.contextValue = 'gh-not-installed';
-    this.description = 'Install gh CLI';
+    this.description = vscode.l10n.t('Install gh CLI');
   }
 }
 
 export class AuthRequiredTreeItem extends vscode.TreeItem {
   constructor(message?: string) {
-    super('Authentication required', vscode.TreeItemCollapsibleState.None);
+    super(vscode.l10n.t('Authentication required'), vscode.TreeItemCollapsibleState.None);
 
     this.iconPath = new vscode.ThemeIcon('key', new vscode.ThemeColor('problemsWarningIcon.foreground'));
     this.tooltip = new vscode.MarkdownString(
-      message || 'Run `gh auth login --scopes codespace` to authenticate'
+      message || vscode.l10n.t('Run `gh auth login --scopes codespace` to authenticate')
     );
     this.contextValue = 'auth-required';
-    this.description = 'Click to authenticate';
+    this.description = vscode.l10n.t('Click to authenticate');
     this.command = {
       command: 'openSpaces.openAuthTerminal',
       title: 'Authenticate',
@@ -253,20 +259,20 @@ export class AuthRequiredTreeItem extends vscode.TreeItem {
 
 export class NoCodespacesTreeItem extends vscode.TreeItem {
   constructor() {
-    super('No codespaces found', vscode.TreeItemCollapsibleState.None);
+    super(vscode.l10n.t('No codespaces found'), vscode.TreeItemCollapsibleState.None);
 
     this.iconPath = new vscode.ThemeIcon('info');
     this.tooltip = new vscode.MarkdownString(
-      'No codespaces found for your account.\n\nCreate one at https://github.com/codespaces'
+      vscode.l10n.t('No codespaces found for your account.\n\nCreate one at https://github.com/codespaces')
     );
     this.contextValue = 'no-codespaces';
-    this.description = 'Create one on GitHub';
+    this.description = vscode.l10n.t('Create one on GitHub');
   }
 }
 
 export class LoadingTreeItem extends vscode.TreeItem {
   constructor() {
-    super('Loading codespaces...', vscode.TreeItemCollapsibleState.None);
+    super(vscode.l10n.t('Loading codespaces...'), vscode.TreeItemCollapsibleState.None);
 
     this.iconPath = new vscode.ThemeIcon('sync~spin');
     this.contextValue = 'loading';
@@ -275,7 +281,7 @@ export class LoadingTreeItem extends vscode.TreeItem {
 
 export class ErrorTreeItem extends vscode.TreeItem {
   constructor(message: string) {
-    super('Error', vscode.TreeItemCollapsibleState.None);
+    super(vscode.l10n.t('Error'), vscode.TreeItemCollapsibleState.None);
 
     this.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
     this.tooltip = message;

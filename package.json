@@ -1,7 +1,7 @@
 {
   "name": "open-spaces",
-  "displayName": "Open Spaces",
-  "description": "Connect to GitHub Codespaces from Code-OSS/VS Codium using GitHub CLI and open-remote-ssh",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "0.0.1",
   "publisher": "skryabiin",
   "license": "MIT",
@@ -20,6 +20,7 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "l10n": "./l10n",
   "extensionKind": ["ui", "workspace"],
   "activationEvents": [
     "onView:openSpaces.codespaceTree"
@@ -29,7 +30,7 @@
       "activitybar": [
         {
           "id": "openSpaces",
-          "title": "GitHub Codespaces",
+          "title": "%viewsContainers.openSpaces.title%",
           "icon": "resources/codespaces.svg"
         }
       ]
@@ -38,64 +39,64 @@
       "openSpaces": [
         {
           "id": "openSpaces.codespaceTree",
-          "name": "Codespaces"
+          "name": "%views.codespaceTree.name%"
         }
       ]
     },
     "commands": [
       {
         "command": "openSpaces.connect",
-        "title": "Connect to Codespace",
+        "title": "%command.connect.title%",
         "icon": "$(plug)"
       },
       {
         "command": "openSpaces.start",
-        "title": "Start Codespace",
+        "title": "%command.start.title%",
         "icon": "$(play)"
       },
       {
         "command": "openSpaces.stop",
-        "title": "Stop Codespace",
+        "title": "%command.stop.title%",
         "icon": "$(debug-stop)"
       },
       {
         "command": "openSpaces.refresh",
-        "title": "Refresh Codespaces",
+        "title": "%command.refresh.title%",
         "icon": "$(refresh)"
       },
       {
         "command": "openSpaces.openAuthTerminal",
-        "title": "Authenticate with GitHub CLI",
+        "title": "%command.openAuthTerminal.title%",
         "icon": "$(terminal)"
       },
       {
         "command": "openSpaces.rebuild",
-        "title": "Rebuild Codespace",
+        "title": "%command.rebuild.title%",
         "icon": "$(sync)"
       },
       {
         "command": "openSpaces.rebuildFull",
-        "title": "Rebuild Codespace (Full)",
+        "title": "%command.rebuildFull.title%",
         "icon": "$(sync)"
       },
       {
         "command": "openSpaces.disconnect",
-        "title": "Disconnect from Codespace",
+        "title": "%command.disconnect.title%",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "openSpaces.delete",
-        "title": "Delete Codespace",
+        "title": "%command.delete.title%",
         "icon": "$(trash)"
       },
       {
         "command": "openSpaces.create",
-        "title": "Create Codespace",
+        "title": "%command.create.title%",
         "icon": "$(add)"
       },
       {
         "command": "openSpaces.openSshTerminal",
-        "title": "Open SSH Terminal",
+        "title": "%command.openSshTerminal.title%",
         "icon": "$(terminal)"
       }
     ],

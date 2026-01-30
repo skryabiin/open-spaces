@@ -25,7 +25,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
       ready: false,
       ghInstalled: false,
       authenticated: false,
-      error: new GhCliError('NOT_INSTALLED', 'GitHub CLI (gh) is not installed'),
+      error: new GhCliError('NOT_INSTALLED', vscode.l10n.t('GitHub CLI (gh) is not installed')),
     };
   }
 
@@ -57,7 +57,7 @@ async function ensureCodespaceAvailable(codespace: Codespace): Promise<Codespace
   const freshCodespace = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Checking codespace status...`,
+      title: vscode.l10n.t('Checking codespace status...'),
       cancellable: false,
     },
     async () => {
@@ -66,11 +66,11 @@ async function ensureCodespaceAvailable(codespace: Codespace): Promise<Codespace
   );
 
   if (!freshCodespace) {
-    throw new Error(`Codespace ${codespace.displayName} no longer exists`);
+    throw new Error(vscode.l10n.t('Codespace {0} no longer exists', codespace.displayName));
   }
 
   if (freshCodespace.state === 'Failed') {
-    throw new Error(`Codespace ${codespace.displayName} is in a failed state. Please rebuild it.`);
+    throw new Error(vscode.l10n.t('Codespace {0} is in a failed state. Please rebuild it.', codespace.displayName));
   }
 
   if (freshCodespace.state !== 'Available') {
@@ -80,8 +80,8 @@ async function ensureCodespaceAvailable(codespace: Codespace): Promise<Codespace
       {
         location: vscode.ProgressLocation.Notification,
         title: isTransitional
-          ? `Waiting for codespace ${codespace.displayName}...`
-          : `Starting codespace ${codespace.displayName}...`,
+          ? vscode.l10n.t('Waiting for codespace {0}...', codespace.displayName)
+          : vscode.l10n.t('Starting codespace {0}...', codespace.displayName),
         cancellable: false,
       },
       async () => {
@@ -109,7 +109,7 @@ export async function connect(codespace: Codespace): Promise<void> {
   const sshConfigOutput = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Getting SSH configuration for ${codespace.displayName}...`,
+      title: vscode.l10n.t('Getting SSH configuration for {0}...', codespace.displayName),
       cancellable: false,
     },
     async () => {
@@ -121,7 +121,7 @@ export async function connect(codespace: Codespace): Promise<void> {
   const entries = sshConfigManager.parseSshConfigOutput(sshConfigOutput);
 
   if (entries.length === 0) {
-    throw new Error('Failed to get SSH configuration from GitHub CLI');
+    throw new Error(vscode.l10n.t('Failed to get SSH configuration from GitHub CLI'));
   }
 
   const entry = entries[0];
@@ -131,7 +131,7 @@ export async function connect(codespace: Codespace): Promise<void> {
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Setting up SSH keys for ${codespace.displayName}...`,
+        title: vscode.l10n.t('Setting up SSH keys for {0}...', codespace.displayName),
         cancellable: false,
       },
       async () => {
@@ -153,7 +153,7 @@ export async function connect(codespace: Codespace): Promise<void> {
   // Format: vscode-remote://ssh-remote+hostname/path
   const repoName = codespace.repository.split('/').pop();
   if (!repoName) {
-    throw new Error('Codespace has no associated repository');
+    throw new Error(vscode.l10n.t('Codespace has no associated repository'));
   }
   const remotePath = `/workspaces/${repoName}`;
   const remoteUri = vscode.Uri.parse(`vscode-remote://ssh-remote+${entry.host}${remotePath}`);
@@ -170,14 +170,14 @@ export async function connect(codespace: Codespace): Promise<void> {
  */
 export async function start(codespace: Codespace): Promise<void> {
   if (codespace.state !== 'Shutdown') {
-    void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} is already running`);
+    void vscode.window.showInformationMessage(vscode.l10n.t('Codespace {0} is already running', codespace.displayName));
     return;
   }
 
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Starting codespace ${codespace.displayName}...`,
+      title: vscode.l10n.t('Starting codespace {0}...', codespace.displayName),
       cancellable: false,
     },
     async () => {
@@ -186,7 +186,7 @@ export async function start(codespace: Codespace): Promise<void> {
     }
   );
 
-  void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} started`);
+  void vscode.window.showInformationMessage(vscode.l10n.t('Codespace {0} started', codespace.displayName));
 }
 
 /**
@@ -195,14 +195,14 @@ export async function start(codespace: Codespace): Promise<void> {
  */
 export async function stop(codespace: Codespace): Promise<void> {
   if (codespace.state !== 'Available') {
-    void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} is not running`);
+    void vscode.window.showInformationMessage(vscode.l10n.t('Codespace {0} is not running', codespace.displayName));
     return;
   }
 
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Stopping codespace ${codespace.displayName}...`,
+      title: vscode.l10n.t('Stopping codespace {0}...', codespace.displayName),
       cancellable: false,
     },
     async () => {
@@ -211,7 +211,7 @@ export async function stop(codespace: Codespace): Promise<void> {
     }
   );
 
-  void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} stopped`);
+  void vscode.window.showInformationMessage(vscode.l10n.t('Codespace {0} stopped', codespace.displayName));
 }
 
 /**
@@ -247,25 +247,25 @@ export async function openSshTerminal(codespace: Codespace): Promise<void> {
  * @param full - Whether to do a full rebuild without cache
  */
 export async function rebuild(codespace: Codespace, full = false): Promise<void> {
-  const fullText = full ? ' (full)' : '';
+  const fullText = full ? vscode.l10n.t(' (full)') : '';
   const confirmMessage = full
-    ? `Are you sure you want to fully rebuild ${codespace.displayName}? This will rebuild without cache and may take longer.`
-    : `Are you sure you want to rebuild ${codespace.displayName}?`;
+    ? vscode.l10n.t('Are you sure you want to fully rebuild {0}? This will rebuild without cache and may take longer.', codespace.displayName)
+    : vscode.l10n.t('Are you sure you want to rebuild {0}?', codespace.displayName);
 
   const confirmed = await vscode.window.showWarningMessage(
     confirmMessage,
     { modal: true },
-    'Rebuild'
+    vscode.l10n.t('Rebuild')
   );
 
-  if (confirmed !== 'Rebuild') {
+  if (confirmed !== vscode.l10n.t('Rebuild')) {
     return;
   }
 
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Rebuilding codespace${fullText} ${codespace.displayName}...`,
+      title: vscode.l10n.t('Rebuilding codespace{0} {1}...', fullText, codespace.displayName),
       cancellable: false,
     },
     async () => {
@@ -274,7 +274,7 @@ export async function rebuild(codespace: Codespace, full = false): Promise<void>
   );
 
   void vscode.window.showInformationMessage(
-    `Codespace ${codespace.displayName} rebuild initiated. It will be available once the rebuild completes.`
+    vscode.l10n.t('Codespace {0} rebuild initiated. It will be available once the rebuild completes.', codespace.displayName)
   );
 }
 
@@ -284,19 +284,19 @@ export async function rebuild(codespace: Codespace, full = false): Promise<void>
  */
 export async function deleteCodespace(codespace: Codespace): Promise<void> {
   const confirmed = await vscode.window.showWarningMessage(
-    `Are you sure you want to delete ${codespace.displayName}? This action cannot be undone and any unsaved changes will be lost.`,
+    vscode.l10n.t('Are you sure you want to delete {0}? This action cannot be undone and any unsaved changes will be lost.', codespace.displayName),
     { modal: true },
-    'Delete'
+    vscode.l10n.t('Delete')
   );
 
-  if (confirmed !== 'Delete') {
+  if (confirmed !== vscode.l10n.t('Delete')) {
     return;
   }
 
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Deleting codespace ${codespace.displayName}...`,
+      title: vscode.l10n.t('Deleting codespace {0}...', codespace.displayName),
       cancellable: false,
     },
     async () => {
@@ -304,7 +304,7 @@ export async function deleteCodespace(codespace: Codespace): Promise<void> {
     }
   );
 
-  void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} deleted`);
+  void vscode.window.showInformationMessage(vscode.l10n.t('Codespace {0} deleted', codespace.displayName));
 }
 
 /**
@@ -316,7 +316,7 @@ export async function createCodespace(): Promise<string | undefined> {
   const repos = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Loading repositories (this may take a moment)...',
+      title: vscode.l10n.t('Loading repositories (this may take a moment)...'),
       cancellable: false,
     },
     async () => {
@@ -326,21 +326,21 @@ export async function createCodespace(): Promise<string | undefined> {
 
   const repoItems: vscode.QuickPickItem[] = repos.map((repo) => ({
     label: repo.nameWithOwner,
-    description: repo.isPrivate ? '$(lock) Private' : '$(globe) Public',
+    description: repo.isPrivate ? vscode.l10n.t('$(lock) Private') : vscode.l10n.t('$(globe) Public'),
     detail: repo.description || undefined,
   }));
 
   // Add option to enter repository manually
   repoItems.push({
-    label: '$(edit) Enter repository manually...',
+    label: vscode.l10n.t('$(edit) Enter repository manually...'),
     description: '',
-    detail: 'Type owner/repo to use a repository not in the list',
+    detail: vscode.l10n.t('Type owner/repo to use a repository not in the list'),
     alwaysShow: true,
   });
 
   const selectedRepo = await vscode.window.showQuickPick(repoItems, {
-    placeHolder: 'Select a repository or enter manually',
-    title: 'Create Codespace - Select Repository',
+    placeHolder: vscode.l10n.t('Select a repository or enter manually'),
+    title: vscode.l10n.t('Create Codespace - Select Repository'),
   });
 
   if (!selectedRepo) {
@@ -348,14 +348,14 @@ export async function createCodespace(): Promise<string | undefined> {
   }
 
   let repo: string;
-  if (selectedRepo.label === '$(edit) Enter repository manually...') {
+  if (selectedRepo.label === vscode.l10n.t('$(edit) Enter repository manually...')) {
     const manualRepo = await vscode.window.showInputBox({
-      prompt: 'Enter the repository (owner/repo)',
+      prompt: vscode.l10n.t('Enter the repository (owner/repo)'),
       placeHolder: 'owner/repo',
-      title: 'Create Codespace - Enter Repository',
+      title: vscode.l10n.t('Create Codespace - Enter Repository'),
       validateInput: (value) => {
         if (!value || !value.includes('/')) {
-          return 'Please enter in format: owner/repo';
+          return vscode.l10n.t('Please enter in format: owner/repo');
         }
         return undefined;
       },
@@ -375,7 +375,7 @@ export async function createCodespace(): Promise<string | undefined> {
     branches = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'Loading branches...',
+        title: vscode.l10n.t('Loading branches...'),
         cancellable: false,
       },
       async () => {
@@ -389,7 +389,7 @@ export async function createCodespace(): Promise<string | undefined> {
   let selectedBranch: string | undefined;
   if (branches.length > 0) {
     const branchItems: vscode.QuickPickItem[] = [
-      { label: '$(git-branch) Default branch', description: 'Use the repository default branch' },
+      { label: vscode.l10n.t('$(git-branch) Default branch'), description: vscode.l10n.t('Use the repository default branch') },
       ...branches.map((branch) => ({
         label: branch.name,
         description: '',
@@ -397,8 +397,8 @@ export async function createCodespace(): Promise<string | undefined> {
     ];
 
     const branchSelection = await vscode.window.showQuickPick(branchItems, {
-      placeHolder: 'Select a branch',
-      title: 'Create Codespace - Select Branch',
+      placeHolder: vscode.l10n.t('Select a branch'),
+      title: vscode.l10n.t('Create Codespace - Select Branch'),
     });
 
     if (!branchSelection) {
@@ -416,7 +416,7 @@ export async function createCodespace(): Promise<string | undefined> {
     machineTypes = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'Loading machine types...',
+        title: vscode.l10n.t('Loading machine types...'),
         cancellable: false,
       },
       async () => {
@@ -430,17 +430,17 @@ export async function createCodespace(): Promise<string | undefined> {
   let selectedMachine: string | undefined;
   if (machineTypes.length > 0) {
     const machineItems: vscode.QuickPickItem[] = [
-      { label: '$(server) Default', description: 'Use the repository default machine type' },
+      { label: vscode.l10n.t('$(server) Default'), description: vscode.l10n.t('Use the repository default machine type') },
       ...machineTypes.map((machine) => ({
         label: machine.displayName,
-        description: `${machine.cpus} cores, ${formatBytes(machine.memoryInBytes)} RAM, ${formatBytes(machine.storageInBytes)} storage`,
+        description: vscode.l10n.t('{0} cores, {1} RAM, {2} storage', machine.cpus, formatBytes(machine.memoryInBytes), formatBytes(machine.storageInBytes)),
         detail: machine.name,
       })),
     ];
 
     const machineSelection = await vscode.window.showQuickPick(machineItems, {
-      placeHolder: 'Select a machine type',
-      title: 'Create Codespace - Select Machine Type',
+      placeHolder: vscode.l10n.t('Select a machine type'),
+      title: vscode.l10n.t('Create Codespace - Select Machine Type'),
     });
 
     if (!machineSelection) {
@@ -454,9 +454,9 @@ export async function createCodespace(): Promise<string | undefined> {
 
   // Step 4: Optional display name
   const displayName = await vscode.window.showInputBox({
-    prompt: 'Enter a display name for the codespace (optional)',
+    prompt: vscode.l10n.t('Enter a display name for the codespace (optional)'),
     placeHolder: 'my-codespace',
-    title: 'Create Codespace - Display Name',
+    title: vscode.l10n.t('Create Codespace - Display Name'),
   });
 
   // User pressed Escape on optional field - continue with creation
@@ -466,7 +466,7 @@ export async function createCodespace(): Promise<string | undefined> {
   const codespaceName = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Creating codespace for ${repo}...`,
+      title: vscode.l10n.t('Creating codespace for {0}...', repo),
       cancellable: false,
     },
     async () => {
@@ -479,6 +479,6 @@ export async function createCodespace(): Promise<string | undefined> {
     }
   );
 
-  void vscode.window.showInformationMessage(`Codespace created: ${codespaceName}`);
+  void vscode.window.showInformationMessage(vscode.l10n.t('Codespace created: {0}', codespaceName));
   return codespaceName;
 }

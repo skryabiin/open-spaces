@@ -1,0 +1,17 @@
+{
+  "displayName": "Open Spaces",
+  "description": "Connect to GitHub Codespaces from Code-OSS/VS Codium using GitHub CLI and open-remote-ssh",
+  "viewsContainers.openSpaces.title": "GitHub Codespaces",
+  "views.codespaceTree.name": "Codespaces",
+  "command.connect.title": "Connect to Codespace",
+  "command.start.title": "Start Codespace",
+  "command.stop.title": "Stop Codespace",
+  "command.refresh.title": "Refresh Codespaces",
+  "command.openAuthTerminal.title": "Authenticate with GitHub CLI",
+  "command.rebuild.title": "Rebuild Codespace",
+  "command.rebuildFull.title": "Rebuild Codespace (Full)",
+  "command.disconnect.title": "Disconnect from Codespace",
+  "command.delete.title": "Delete Codespace",
+  "command.create.title": "Create Codespace",
+  "command.openSshTerminal.title": "Open SSH Terminal"
+}

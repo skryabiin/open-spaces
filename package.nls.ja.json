@@ -1,0 +1,17 @@
+{
+  "displayName": "Open Spaces",
+  "description": "GitHub CLI と open-remote-ssh を使用して Code-OSS/VS Codium から GitHub Codespaces に接続",
+  "viewsContainers.openSpaces.title": "GitHub Codespaces",
+  "views.codespaceTree.name": "Codespaces",
+  "command.connect.title": "Codespace に接続",
+  "command.start.title": "Codespace を開始",
+  "command.stop.title": "Codespace を停止",
+  "command.refresh.title": "Codespaces を更新",
+  "command.openAuthTerminal.title": "GitHub CLI で認証",
+  "command.rebuild.title": "Codespace を再構築",
+  "command.rebuildFull.title": "Codespace を再構築（フル）",
+  "command.disconnect.title": "Codespace から切断",
+  "command.delete.title": "Codespace を削除",
+  "command.create.title": "Codespace を作成",
+  "command.openSshTerminal.title": "SSH ターミナルを開く"
+}

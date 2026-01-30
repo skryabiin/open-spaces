@@ -1,16 +1,17 @@
+import * as vscode from 'vscode';
 import { MachineInfo } from '../types';
 
 /**
  * Formats bytes into a human-readable string (MB or GB).
  */
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) return vscode.l10n.t('0 B');
   const gb = bytes / (1024 * 1024 * 1024);
   if (gb >= 1) {
-    return `${Math.round(gb)} GB`;
+    return vscode.l10n.t('{0} GB', Math.round(gb));
   }
   const mb = bytes / (1024 * 1024);
-  return `${Math.round(mb)} MB`;
+  return vscode.l10n.t('{0} MB', Math.round(mb));
 }
 
 /**
@@ -19,12 +20,14 @@ export function formatBytes(bytes: number): string {
 export function formatMachineSpecs(machineInfo: MachineInfo): string {
   const parts: string[] = [];
   if (machineInfo.cpus > 0) {
-    parts.push(`${machineInfo.cpus} ${machineInfo.cpus === 1 ? 'core' : 'cores'}`);
+    parts.push(machineInfo.cpus === 1
+      ? vscode.l10n.t('{0} core', machineInfo.cpus)
+      : vscode.l10n.t('{0} cores', machineInfo.cpus));
   }
   if (machineInfo.memoryInBytes > 0) {
-    parts.push(`${formatBytes(machineInfo.memoryInBytes)} RAM`);
+    parts.push(vscode.l10n.t('{0} RAM', formatBytes(machineInfo.memoryInBytes)));
   }
-  return parts.join(' • ') || machineInfo.displayName || 'Unknown';
+  return parts.join(' • ') || machineInfo.displayName || vscode.l10n.t('Unknown');
 }
 
 /**
@@ -36,7 +39,7 @@ export function getTimeAgo(date: Date): string {
 
   // Handle clock skew or future dates
   if (diffMs < 0) {
-    return 'Just now';
+    return vscode.l10n.t('Just now');
   }
 
   const diffMins = Math.floor(diffMs / 60000);
@@ -44,13 +47,13 @@ export function getTimeAgo(date: Date): string {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffMins < 1) {
-    return 'Just now';
+    return vscode.l10n.t('Just now');
   } else if (diffMins < 60) {
-    return `${diffMins}m ago`;
+    return vscode.l10n.t('{0}m ago', diffMins);
   } else if (diffHours < 24) {
-    return `${diffHours}h ago`;
+    return vscode.l10n.t('{0}h ago', diffHours);
   } else if (diffDays < 7) {
-    return `${diffDays}d ago`;
+    return vscode.l10n.t('{0}d ago', diffDays);
   } else {
     return date.toLocaleDateString();
   }
@@ -74,21 +77,21 @@ export function getIdleTimeRemaining(
   const remainingMins = idleTimeoutMinutes - elapsedMins;
 
   if (remainingMins <= 0) {
-    return { text: 'Auto-stop imminent', isLow: true };
+    return { text: vscode.l10n.t('Auto-stop imminent'), isLow: true };
   }
 
   const isLow = remainingMins <= 10;
 
   if (remainingMins < 60) {
-    return { text: `Auto-stop in ${remainingMins}m`, isLow };
+    return { text: vscode.l10n.t('Auto-stop in {0}m', remainingMins), isLow };
   }
 
   const hours = Math.floor(remainingMins / 60);
   const mins = remainingMins % 60;
 
   if (mins === 0) {
-    return { text: `Auto-stop in ${hours}h`, isLow };
+    return { text: vscode.l10n.t('Auto-stop in {0}h', hours), isLow };
   }
 
-  return { text: `Auto-stop in ${hours}h ${mins}m`, isLow };
+  return { text: vscode.l10n.t('Auto-stop in {0}h {1}m', hours, mins), isLow };
 }

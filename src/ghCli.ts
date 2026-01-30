@@ -26,11 +26,11 @@ function isExecError(error: unknown): error is ExecError {
  */
 function validateCodespaceName(name: string): void {
   if (!name || typeof name !== 'string') {
-    throw new GhCliError('COMMAND_FAILED', 'Invalid codespace name');
+    throw new GhCliError('COMMAND_FAILED', vscode.l10n.t('Invalid codespace name'));
   }
   // Codespace names should be alphanumeric with hyphens
   if (!/^[a-zA-Z0-9][-a-zA-Z0-9]*$/.test(name)) {
-    throw new GhCliError('COMMAND_FAILED', `Invalid codespace name format: ${name}`);
+    throw new GhCliError('COMMAND_FAILED', vscode.l10n.t('Invalid codespace name format: {0}', name));
   }
 }
 
@@ -102,7 +102,7 @@ async function runGh(args: string[], timeout = 30000): Promise<ExecResult> {
     return { stdout: result.stdout, stderr: result.stderr };
   } catch (error: unknown) {
     if (isExecError(error) && error.code === 'ENOENT') {
-      throw new GhCliError('NOT_INSTALLED', 'GitHub CLI (gh) is not installed');
+      throw new GhCliError('NOT_INSTALLED', vscode.l10n.t('GitHub CLI (gh) is not installed'));
     }
     throw error;
   }
@@ -182,14 +182,14 @@ export async function listCodespaces(): Promise<Codespace[]> {
   try {
     const data: unknown = JSON.parse(result.stdout);
     if (!isCodespaceResponse(data)) {
-      throw new GhCliError('PARSE_ERROR', 'Invalid codespace list response structure');
+      throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Invalid codespace list response structure'));
     }
     return data.map(parseCodespaceResponse);
   } catch (error) {
     if (error instanceof GhCliError) {
       throw error;
     }
-    throw new GhCliError('PARSE_ERROR', 'Failed to parse codespace list output');
+    throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Failed to parse codespace list output'));
   }
 }
 
@@ -286,11 +286,11 @@ export async function getCodespace(codespaceName: string): Promise<Codespace | n
   try {
     data = JSON.parse(result.stdout);
   } catch {
-    throw new GhCliError('PARSE_ERROR', 'Failed to parse codespace data');
+    throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Failed to parse codespace data'));
   }
 
   if (!isCodespaceResponse(data)) {
-    throw new GhCliError('PARSE_ERROR', 'Invalid codespace response structure');
+    throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Invalid codespace response structure'));
   }
 
   const cs = data.find((c) => c.name === codespaceName);
@@ -409,13 +409,13 @@ export async function waitForState(
 
   while (Date.now() - startTime < timeoutMs) {
     if (token?.isCancellationRequested) {
-      throw new GhCliError('COMMAND_FAILED', 'Operation cancelled');
+      throw new GhCliError('COMMAND_FAILED', vscode.l10n.t('Operation cancelled'));
     }
 
     const codespace = await getCodespace(codespaceName);
 
     if (!codespace) {
-      throw new GhCliError('COMMAND_FAILED', `Codespace ${codespaceName} not found`);
+      throw new GhCliError('COMMAND_FAILED', vscode.l10n.t('Codespace {0} not found', codespaceName));
     }
 
     if (codespace.state === targetState) {
@@ -423,7 +423,7 @@ export async function waitForState(
     }
 
     if (codespace.state === 'Failed') {
-      throw new GhCliError('COMMAND_FAILED', `Codespace ${codespaceName} is in failed state`);
+      throw new GhCliError('COMMAND_FAILED', vscode.l10n.t('Codespace {0} is in failed state', codespaceName));
     }
 
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
@@ -431,7 +431,7 @@ export async function waitForState(
 
   throw new GhCliError(
     'COMMAND_FAILED',
-    `Timeout waiting for codespace ${codespaceName} to reach state ${targetState}`
+    vscode.l10n.t('Timeout waiting for codespace {0} to reach state {1}', codespaceName, targetState)
   );
 }
 
@@ -456,7 +456,7 @@ export async function listRepositories(): Promise<Repository[]> {
   const username = userResult.stdout.trim();
 
   if (!username) {
-    throw new GhCliError('NOT_AUTHENTICATED', 'Could not get current user');
+    throw new GhCliError('NOT_AUTHENTICATED', vscode.l10n.t('Could not get current user'));
   }
 
   // Get push events with pagination to go further back in time
@@ -517,7 +517,7 @@ export async function listBranches(repo: string): Promise<Branch[]> {
   try {
     const data: unknown = JSON.parse(result.stdout);
     if (!isBranchResponse(data)) {
-      throw new GhCliError('PARSE_ERROR', 'Invalid branch list response structure');
+      throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Invalid branch list response structure'));
     }
     return data.map((branch) => ({
       name: branch.name || '',
@@ -526,7 +526,7 @@ export async function listBranches(repo: string): Promise<Branch[]> {
     if (error instanceof GhCliError) {
       throw error;
     }
-    throw new GhCliError('PARSE_ERROR', 'Failed to parse branch list output');
+    throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Failed to parse branch list output'));
   }
 }
 
@@ -577,7 +577,7 @@ export async function listMachineTypes(repo: string, branch?: string): Promise<M
   try {
     const data: unknown = JSON.parse(result.stdout);
     if (!isMachinesApiResponse(data)) {
-      throw new GhCliError('PARSE_ERROR', 'Invalid machine types response structure');
+      throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Invalid machine types response structure'));
     }
     return (data.machines || []).map((machine) => ({
       name: machine.name || '',
@@ -590,7 +590,7 @@ export async function listMachineTypes(repo: string, branch?: string): Promise<M
     if (error instanceof GhCliError) {
       throw error;
     }
-    throw new GhCliError('PARSE_ERROR', 'Failed to parse machine types output');
+    throw new GhCliError('PARSE_ERROR', vscode.l10n.t('Failed to parse machine types output'));
   }
 }
 
@@ -629,7 +629,7 @@ export async function createCodespace(options: CreateCodespaceOptions): Promise<
   // gh codespace create outputs the codespace name directly
   const codespaceName = result.stdout.trim();
   if (!codespaceName) {
-    throw new GhCliError('PARSE_ERROR', 'No codespace name in response');
+    throw new GhCliError('PARSE_ERROR', vscode.l10n.t('No codespace name in response'));
   }
   return codespaceName;
 }

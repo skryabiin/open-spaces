@@ -1,0 +1,17 @@
+{
+  "displayName": "Open Spaces",
+  "description": "使用 GitHub CLI 和 open-remote-ssh 从 Code-OSS/VS Codium 连接到 GitHub Codespaces",
+  "viewsContainers.openSpaces.title": "GitHub Codespaces",
+  "views.codespaceTree.name": "代码空间",
+  "command.connect.title": "连接到代码空间",
+  "command.start.title": "启动代码空间",
+  "command.stop.title": "停止代码空间",
+  "command.refresh.title": "刷新代码空间",
+  "command.openAuthTerminal.title": "使用 GitHub CLI 进行身份验证",
+  "command.rebuild.title": "重建代码空间",
+  "command.rebuildFull.title": "重建代码空间（完整）",
+  "command.disconnect.title": "断开代码空间连接",
+  "command.delete.title": "删除代码空间",
+  "command.create.title": "创建代码空间",
+  "command.openSshTerminal.title": "打开 SSH 终端"
+}
