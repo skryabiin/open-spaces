@@ -523,8 +523,8 @@ export async function createCodespace(): Promise<string | undefined> {
 
   // Step 4: Optional display name
   const displayName = await vscode.window.showInputBox({
-    prompt: vscode.l10n.t('Enter a display name for the codespace (optional)'),
-    placeHolder: 'my-codespace',
+    prompt: vscode.l10n.t('Enter a display name for the codespace'),
+    placeHolder: vscode.l10n.t('Generated if left blank'),
     title: vscode.l10n.t('Create Codespace - Display Name'),
   });
 
