@@ -2,7 +2,7 @@
   "name": "open-spaces",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "skryabiin",
   "license": "MIT",
   "repository": {
@@ -101,6 +101,11 @@
         "command": "openSpaces.openSshTerminal",
         "title": "%command.openSshTerminal.title%",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "openSpaces.addCodespaceScope",
+        "title": "%command.addCodespaceScope.title%",
+        "icon": "$(shield)"
       }
     ],
     "menus": {
@@ -145,6 +150,11 @@
         {
           "command": "openSpaces.openAuthTerminal",
           "when": "view == openSpaces.codespaceTree && viewItem == auth-required",
+          "group": "inline"
+        },
+        {
+          "command": "openSpaces.addCodespaceScope",
+          "when": "view == openSpaces.codespaceTree && viewItem == scope-required",
           "group": "inline"
         },
         {
