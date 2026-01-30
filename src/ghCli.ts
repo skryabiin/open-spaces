@@ -70,6 +70,29 @@ function isCodespaceResponse(data: unknown): data is CodespaceResponse[] {
   );
 }
 
+function parseCodespaceResponse(cs: CodespaceResponse): Codespace {
+  const gitStatusRaw = cs.gitStatus;
+  const gitStatus: GitStatus = {
+    ref: gitStatusRaw?.ref || '',
+    ahead: gitStatusRaw?.ahead || 0,
+    behind: gitStatusRaw?.behind || 0,
+    hasUncommittedChanges: gitStatusRaw?.hasUncommittedChanges || false,
+    hasUnpushedChanges: gitStatusRaw?.hasUnpushedChanges || false,
+  };
+  return {
+    name: cs.name,
+    displayName: cs.displayName || cs.name,
+    state: cs.state as CodespaceState,
+    repository: cs.repository || '',
+    owner: cs.owner?.login || '',
+    branch: gitStatus.ref,
+    lastUsedAt: cs.lastUsedAt || '',
+    createdAt: cs.createdAt || '',
+    machineName: cs.machineName || '',
+    gitStatus,
+  };
+}
+
 async function runGh(args: string[], timeout = 30000): Promise<ExecResult> {
   try {
     const result = await execFileAsync('gh', args, {
@@ -161,28 +184,7 @@ export async function listCodespaces(): Promise<Codespace[]> {
     if (!isCodespaceResponse(data)) {
       throw new GhCliError('PARSE_ERROR', 'Invalid codespace list response structure');
     }
-    return data.map((cs) => {
-      const gitStatusRaw = cs.gitStatus;
-      const gitStatus: GitStatus = {
-        ref: gitStatusRaw?.ref || '',
-        ahead: gitStatusRaw?.ahead || 0,
-        behind: gitStatusRaw?.behind || 0,
-        hasUncommittedChanges: gitStatusRaw?.hasUncommittedChanges || false,
-        hasUnpushedChanges: gitStatusRaw?.hasUnpushedChanges || false,
-      };
-      return {
-        name: cs.name,
-        displayName: cs.displayName || cs.name,
-        state: cs.state as CodespaceState,
-        repository: cs.repository || '',
-        owner: cs.owner?.login || '',
-        branch: gitStatus.ref,
-        lastUsedAt: cs.lastUsedAt || '',
-        createdAt: cs.createdAt || '',
-        machineName: cs.machineName || '',
-        gitStatus,
-      };
-    });
+    return data.map(parseCodespaceResponse);
   } catch (error) {
     if (error instanceof GhCliError) {
       throw error;
@@ -292,32 +294,7 @@ export async function getCodespace(codespaceName: string): Promise<Codespace | n
   }
 
   const cs = data.find((c) => c.name === codespaceName);
-
-  if (!cs) {
-    return null;
-  }
-
-  const gitStatusRaw = cs.gitStatus;
-  const gitStatus: GitStatus = {
-    ref: gitStatusRaw?.ref || '',
-    ahead: gitStatusRaw?.ahead || 0,
-    behind: gitStatusRaw?.behind || 0,
-    hasUncommittedChanges: gitStatusRaw?.hasUncommittedChanges || false,
-    hasUnpushedChanges: gitStatusRaw?.hasUnpushedChanges || false,
-  };
-
-  return {
-    name: cs.name,
-    displayName: cs.displayName || cs.name,
-    state: cs.state as CodespaceState,
-    repository: cs.repository || '',
-    owner: cs.owner?.login || '',
-    branch: gitStatus.ref,
-    lastUsedAt: cs.lastUsedAt || '',
-    createdAt: cs.createdAt || '',
-    machineName: cs.machineName || '',
-    gitStatus,
-  };
+  return cs ? parseCodespaceResponse(cs) : null;
 }
 
 /**
@@ -463,23 +440,6 @@ export interface Repository {
   description: string;
   isPrivate: boolean;
   pushedAt?: string;
-}
-
-interface OrgResponse {
-  login?: string;
-}
-
-function isOrgResponse(data: unknown): data is OrgResponse[] {
-  return (
-    Array.isArray(data) &&
-    data.every((item): item is OrgResponse => {
-      if (typeof item !== 'object' || item === null) {
-        return false;
-      }
-      const obj = item as Record<string, unknown>;
-      return 'login' in obj && typeof obj.login === 'string';
-    })
-  );
 }
 
 interface RepoListResponse {

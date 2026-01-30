@@ -3,6 +3,8 @@ import * as ghCli from './ghCli';
 import * as sshConfigManager from './sshConfigManager';
 import { Codespace, GhCliError } from './types';
 import { log } from './extension';
+import { isTransitionalState } from './constants';
+import { formatBytes } from './utils/formatting';
 
 export interface PrerequisiteResult {
   ready: boolean;
@@ -46,13 +48,12 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
 }
 
 /**
- * Connects to a codespace by configuring SSH and opening the remote folder.
- * If the codespace is shutdown, it will be started first.
- * @param codespace - The codespace to connect to
- * @throws {Error} If connection fails or codespace has no repository
+ * Ensures a codespace is available (running). Starts it if needed.
+ * @param codespace - The codespace to ensure is available
+ * @returns The fresh codespace state
+ * @throws {Error} If the codespace no longer exists or is in a failed state
  */
-export async function connect(codespace: Codespace): Promise<void> {
-  // Fetch fresh codespace state before connecting
+async function ensureCodespaceAvailable(codespace: Codespace): Promise<Codespace> {
   const freshCodespace = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -72,10 +73,8 @@ export async function connect(codespace: Codespace): Promise<void> {
     throw new Error(`Codespace ${codespace.displayName} is in a failed state. Please rebuild it.`);
   }
 
-  // Handle non-available states
   if (freshCodespace.state !== 'Available') {
-    const transitionalStates = ['Starting', 'Provisioning', 'Rebuilding', 'Updating'];
-    const isTransitional = transitionalStates.includes(freshCodespace.state);
+    const isTransitional = isTransitionalState(freshCodespace.state);
 
     await vscode.window.withProgress(
       {
@@ -86,7 +85,6 @@ export async function connect(codespace: Codespace): Promise<void> {
         cancellable: false,
       },
       async () => {
-        // Only start if it's shutdown, not if it's already transitioning
         if (freshCodespace.state === 'Shutdown') {
           await ghCli.startCodespace(codespace.name);
         }
@@ -94,6 +92,18 @@ export async function connect(codespace: Codespace): Promise<void> {
       }
     );
   }
+
+  return freshCodespace;
+}
+
+/**
+ * Connects to a codespace by configuring SSH and opening the remote folder.
+ * If the codespace is shutdown, it will be started first.
+ * @param codespace - The codespace to connect to
+ * @throws {Error} If connection fails or codespace has no repository
+ */
+export async function connect(codespace: Codespace): Promise<void> {
+  await ensureCodespaceAvailable(codespace);
 
   // Get SSH config from gh CLI
   const sshConfigOutput = await vscode.window.withProgress(
@@ -221,48 +231,7 @@ export function openAuthTerminal(): void {
  * @param codespace - The codespace to connect to
  */
 export async function openSshTerminal(codespace: Codespace): Promise<void> {
-  // Fetch fresh codespace state
-  const freshCodespace = await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: `Checking codespace status...`,
-      cancellable: false,
-    },
-    async () => {
-      return await ghCli.getCodespace(codespace.name);
-    }
-  );
-
-  if (!freshCodespace) {
-    throw new Error(`Codespace ${codespace.displayName} no longer exists`);
-  }
-
-  if (freshCodespace.state === 'Failed') {
-    throw new Error(`Codespace ${codespace.displayName} is in a failed state. Please rebuild it.`);
-  }
-
-  // Handle non-available states
-  if (freshCodespace.state !== 'Available') {
-    const transitionalStates = ['Starting', 'Provisioning', 'Rebuilding', 'Updating'];
-    const isTransitional = transitionalStates.includes(freshCodespace.state);
-
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: isTransitional
-          ? `Waiting for codespace ${codespace.displayName}...`
-          : `Starting codespace ${codespace.displayName}...`,
-        cancellable: false,
-      },
-      async () => {
-        // Only start if it's shutdown, not if it's already transitioning
-        if (freshCodespace.state === 'Shutdown') {
-          await ghCli.startCodespace(codespace.name);
-        }
-        await ghCli.waitForState(codespace.name, 'Available');
-      }
-    );
-  }
+  await ensureCodespaceAvailable(codespace);
 
   // Create terminal with SSH connection
   const terminal = vscode.window.createTerminal({
@@ -338,14 +307,6 @@ export async function deleteCodespace(codespace: Codespace): Promise<void> {
   void vscode.window.showInformationMessage(`Codespace ${codespace.displayName} deleted`);
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) {
-    return '0 GB';
-  }
-  const gb = bytes / (1024 * 1024 * 1024);
-  return `${gb.toFixed(0)} GB`;
-}
-
 /**
  * Creates a new codespace with an interactive UI flow.
  * @returns The name of the created codespace, or undefined if cancelled
@@ -355,7 +316,7 @@ export async function createCodespace(): Promise<string | undefined> {
   const repos = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Loading repositories (this may take a moment for large organizations)...',
+      title: 'Loading repositories (this may take a moment)...',
       cancellable: false,
     },
     async () => {

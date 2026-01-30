@@ -3,6 +3,7 @@ import { CodespaceTreeProvider } from './ui/codespaceTreeProvider';
 import { CodespaceTreeItem } from './ui/treeItems';
 import * as codespaceManager from './codespaceManager';
 import * as ghCli from './ghCli';
+import { ensureError } from './utils/errors';
 
 let treeProvider: CodespaceTreeProvider;
 let outputChannel: vscode.OutputChannel;
@@ -112,7 +113,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         await codespaceManager.connect(item.codespace);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to connect to codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to connect: ${err.message}`);
       }
@@ -130,7 +131,7 @@ export function activate(context: vscode.ExtensionContext) {
         await codespaceManager.start(item.codespace);
         treeProvider.refresh();
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to start codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to start codespace: ${err.message}`);
       }
@@ -148,7 +149,7 @@ export function activate(context: vscode.ExtensionContext) {
         await codespaceManager.stop(item.codespace);
         treeProvider.refresh();
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to stop codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to stop codespace: ${err.message}`);
       }
@@ -171,7 +172,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         await codespaceManager.openSshTerminal(item.codespace);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to open SSH terminal for codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to open SSH terminal: ${err.message}`);
       }
@@ -189,7 +190,7 @@ export function activate(context: vscode.ExtensionContext) {
         await codespaceManager.rebuild(item.codespace, false);
         treeProvider.refresh();
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to rebuild codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
       }
@@ -207,7 +208,7 @@ export function activate(context: vscode.ExtensionContext) {
         await codespaceManager.rebuild(item.codespace, true);
         treeProvider.refresh();
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to full rebuild codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to rebuild codespace: ${err.message}`);
       }
@@ -225,7 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
         await codespaceManager.deleteCodespace(item.codespace);
         treeProvider.refresh();
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log(`Failed to delete codespace ${item.codespace.name}`, err);
         void vscode.window.showErrorMessage(`Failed to delete codespace: ${err.message}`);
       }
@@ -260,7 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
           treeProvider.refresh();
         }
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = ensureError(error);
         log('Failed to create codespace', err);
         void vscode.window.showErrorMessage(`Failed to create codespace: ${err.message}`);
       }

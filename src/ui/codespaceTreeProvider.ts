@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as ghCli from '../ghCli';
 import * as codespaceManager from '../codespaceManager';
 import { Codespace, GhCliError } from '../types';
+import { isTransitionalState } from '../constants';
+import { ensureError } from '../utils/errors';
 import {
   RepositoryTreeItem,
   CodespaceTreeItem,
@@ -112,7 +114,7 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
       this.loading = false;
       this._onDidChangeTreeData.fire();
     } catch (err) {
-      this.error = err instanceof Error ? err : new Error(String(err));
+      this.error = ensureError(err);
       this.codespaces = [];
       this.loading = false;
       this._onDidChangeTreeData.fire();
@@ -124,16 +126,7 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
       return;
     }
 
-    const transitionalStates = [
-      'Starting',
-      'ShuttingDown',
-      'Provisioning',
-      'Rebuilding',
-      'Exporting',
-      'Updating',
-    ];
-
-    const hasTransitional = this.codespaces.some((cs) => transitionalStates.includes(cs.state));
+    const hasTransitional = this.codespaces.some((cs) => isTransitionalState(cs.state));
 
     if (hasTransitional) {
       this.isPolling = true;
