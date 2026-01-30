@@ -141,11 +141,8 @@
   "$(circle-outline) Stopped": "$(circle-outline) Zatrzymany",
   "$(sync~spin) Starting": "$(sync~spin) Uruchamianie",
   "$(sync~spin) Stopping": "$(sync~spin) Zatrzymywanie",
-  "Connect to Codespace": "Połącz z Codespace",
-  "Start Codespace": "Uruchom Codespace",
-  "Stop Codespace": "Zatrzymaj Codespace",
-  "Open SSH Terminal": "Otwórz Terminal SSH",
-  "Rebuild Codespace": "Przebuduj Codespace",
-  "Full Rebuild Codespace": "Przebuduj Codespace w Pełni",
-  "Delete Codespace": "Usuń Codespace"
+  "Codespace scope required": "Wymagany zakres codespace",
+  "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Twój token GitHub wymaga zakresu `codespace` do dostępu do codespaces.\n\nKliknij, aby dodać zakres.",
+  "Click to add scope": "Kliknij, aby dodać zakres",
+  "Add Scope": "Dodaj Zakres"
 }

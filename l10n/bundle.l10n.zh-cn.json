@@ -141,11 +141,8 @@
   "$(circle-outline) Stopped": "$(circle-outline) 已停止",
   "$(sync~spin) Starting": "$(sync~spin) 正在启动",
   "$(sync~spin) Stopping": "$(sync~spin) 正在停止",
-  "Connect to Codespace": "连接到代码空间",
-  "Start Codespace": "启动代码空间",
-  "Stop Codespace": "停止代码空间",
-  "Open SSH Terminal": "打开 SSH 终端",
-  "Rebuild Codespace": "重建代码空间",
-  "Full Rebuild Codespace": "完全重建代码空间",
-  "Delete Codespace": "删除代码空间"
+  "Codespace scope required": "需要代码空间权限",
+  "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "您的 GitHub 令牌需要 `codespace` 权限才能访问代码空间。\n\n点击添加权限。",
+  "Click to add scope": "点击添加权限",
+  "Add Scope": "添加权限"
 }

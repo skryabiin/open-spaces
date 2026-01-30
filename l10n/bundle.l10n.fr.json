@@ -141,11 +141,8 @@
   "$(circle-outline) Stopped": "$(circle-outline) Arrêté",
   "$(sync~spin) Starting": "$(sync~spin) Démarrage",
   "$(sync~spin) Stopping": "$(sync~spin) Arrêt",
-  "Connect to Codespace": "Se connecter au Codespace",
-  "Start Codespace": "Démarrer le Codespace",
-  "Stop Codespace": "Arrêter le Codespace",
-  "Open SSH Terminal": "Ouvrir le Terminal SSH",
-  "Rebuild Codespace": "Reconstruire le Codespace",
-  "Full Rebuild Codespace": "Reconstruire le Codespace Complètement",
-  "Delete Codespace": "Supprimer le Codespace"
+  "Codespace scope required": "Portée codespace requise",
+  "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Votre jeton GitHub a besoin de la portée `codespace` pour accéder aux codespaces.\n\nCliquez pour ajouter la portée.",
+  "Click to add scope": "Cliquez pour ajouter la portée",
+  "Add Scope": "Ajouter la Portée"
 }

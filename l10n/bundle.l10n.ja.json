@@ -141,11 +141,8 @@
   "$(circle-outline) Stopped": "$(circle-outline) 停止",
   "$(sync~spin) Starting": "$(sync~spin) 開始中",
   "$(sync~spin) Stopping": "$(sync~spin) 停止中",
-  "Connect to Codespace": "Codespace に接続",
-  "Start Codespace": "Codespace を開始",
-  "Stop Codespace": "Codespace を停止",
-  "Open SSH Terminal": "SSH ターミナルを開く",
-  "Rebuild Codespace": "Codespace を再構築",
-  "Full Rebuild Codespace": "Codespace を完全に再構築",
-  "Delete Codespace": "Codespace を削除"
+  "Codespace scope required": "Codespace スコープが必要です",
+  "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Codespace にアクセスするには、GitHub トークンに `codespace` スコープが必要です。\n\nクリックしてスコープを追加してください。",
+  "Click to add scope": "クリックしてスコープを追加",
+  "Add Scope": "スコープを追加"
 }
