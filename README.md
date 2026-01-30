@@ -6,8 +6,11 @@ Connect to GitHub Codespaces from Code-OSS, VS Codium, or other open-source VS C
 
 - **Browse Codespaces** - View all your GitHub Codespaces in a sidebar tree view
 - **Connect via SSH** - Connect to codespaces using SSH tunneling (no proprietary extensions required)
+- **Create Codespaces** - Create new codespaces with repository, branch, and machine type selection
 - **Start/Stop Codespaces** - Manage codespace lifecycle directly from the editor
 - **Rebuild Codespaces** - Trigger regular or full rebuilds from the context menu
+- **Delete Codespaces** - Remove codespaces you no longer need
+- **SSH Terminal** - Open a terminal session to a codespace without full IDE connection
 - **Automatic SSH Configuration** - Manages `~/.ssh/config` entries automatically
 - **Authentication Helper** - Quick access to GitHub CLI authentication
 
@@ -55,10 +58,13 @@ Search for "Open Spaces" in the extensions marketplace.
 
 ### Managing Codespaces
 
+- **Create**: Click the + icon in the view title bar to create a new codespace
 - **Start**: Click the play icon on a stopped codespace
 - **Stop**: Click the stop icon on a running codespace
+- **SSH Terminal**: Right-click and select "Open SSH Terminal" for a terminal-only connection
 - **Rebuild**: Right-click and select "Rebuild Codespace"
 - **Full Rebuild**: Right-click and select "Rebuild Codespace (Full)" to rebuild without cache
+- **Delete**: Right-click and select "Delete Codespace" to permanently remove it
 
 ### Disconnecting
 
