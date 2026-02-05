@@ -188,6 +188,18 @@ export async function connect(codespace: Codespace): Promise<void> {
   // Write to SSH config
   sshConfigManager.setEntry(entry);
 
+  // Probe SSH readiness before handing off to remote-ssh
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: vscode.l10n.t('Verifying SSH connection to {0}...', codespace.displayName),
+      cancellable: false,
+    },
+    async () => {
+      await ghCli.waitForSshReady(codespace.name, 3, 3000, log);
+    }
+  );
+
   // Refresh open-remote-ssh if available
   await vscode.commands.executeCommand('remote-ssh.refreshHosts').then(
     () => {},

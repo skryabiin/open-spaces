@@ -144,5 +144,8 @@
   "Codespace scope required": "Portée codespace requise",
   "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Votre jeton GitHub a besoin de la portée `codespace` pour accéder aux codespaces.\n\nCliquez pour ajouter la portée.",
   "Click to add scope": "Cliquez pour ajouter la portée",
-  "Add Scope": "Ajouter la Portée"
+  "Add Scope": "Ajouter la Portée",
+  "SSH readiness probe attempt {0}/{1} failed": "Tentative de vérification SSH {0}/{1} échouée",
+  "Codespace SSH connection is not ready after {0} attempts": "La connexion SSH du codespace n'est pas prête après {0} tentatives",
+  "Verifying SSH connection to {0}...": "Vérification de la connexion SSH à {0}..."
 }

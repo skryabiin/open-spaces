@@ -144,5 +144,8 @@
   "Codespace scope required": "Codespace スコープが必要です",
   "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Codespace にアクセスするには、GitHub トークンに `codespace` スコープが必要です。\n\nクリックしてスコープを追加してください。",
   "Click to add scope": "クリックしてスコープを追加",
-  "Add Scope": "スコープを追加"
+  "Add Scope": "スコープを追加",
+  "SSH readiness probe attempt {0}/{1} failed": "SSH 接続確認の試行 {0}/{1} が失敗しました",
+  "Codespace SSH connection is not ready after {0} attempts": "{0} 回の試行後も Codespace の SSH 接続が準備できていません",
+  "Verifying SSH connection to {0}...": "{0} への SSH 接続を確認中..."
 }

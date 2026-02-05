@@ -144,5 +144,8 @@
   "Codespace scope required": "需要代码空间权限",
   "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "您的 GitHub 令牌需要 `codespace` 权限才能访问代码空间。\n\n点击添加权限。",
   "Click to add scope": "点击添加权限",
-  "Add Scope": "添加权限"
+  "Add Scope": "添加权限",
+  "SSH readiness probe attempt {0}/{1} failed": "SSH 就绪检测第 {0}/{1} 次尝试失败",
+  "Codespace SSH connection is not ready after {0} attempts": "经过 {0} 次尝试后代码空间 SSH 连接仍未就绪",
+  "Verifying SSH connection to {0}...": "正在验证到 {0} 的 SSH 连接..."
 }

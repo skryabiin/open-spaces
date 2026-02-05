@@ -126,12 +126,29 @@ export async function checkInstalled(): Promise<boolean> {
 
 /**
  * Checks if the user is authenticated with GitHub CLI.
- * @returns Object indicating authentication status and any error
+ * @returns Object indicating authentication status, scope status, and any error
  */
-export async function checkAuth(): Promise<{ authenticated: boolean; error?: GhCliError }> {
+export async function checkAuth(): Promise<{
+  authenticated: boolean;
+  hasCodespaceScope: boolean;
+  error?: GhCliError;
+}> {
   try {
-    await runGh(['auth', 'status']);
-    return { authenticated: true };
+    const result = await runGh(['auth', 'status']);
+    // Check for codespace scope in output
+    // Format: "Token scopes: 'codespace', 'gist', ..."
+    const hasCodespaceScope =
+      result.stdout.includes("'codespace'") || result.stderr.includes("'codespace'");
+
+    if (!hasCodespaceScope) {
+      return {
+        authenticated: true,
+        hasCodespaceScope: false,
+        error: new GhCliError('SCOPE_REQUIRED', vscode.l10n.t('Codespace scope required')),
+      };
+    }
+
+    return { authenticated: true, hasCodespaceScope: true };
   } catch (error: unknown) {
     const stderr = isExecError(error)
       ? error.stderr || error.message || ''
@@ -142,25 +159,36 @@ export async function checkAuth(): Promise<{ authenticated: boolean; error?: GhC
     if (stderr.includes('not logged in')) {
       return {
         authenticated: false,
+        hasCodespaceScope: false,
         error: new GhCliError('NOT_AUTHENTICATED', 'Not authenticated with GitHub CLI', stderr),
       };
     }
 
     if (stderr.includes('codespace') && stderr.includes('scope')) {
       return {
-        authenticated: false,
-        error: new GhCliError('SCOPE_REQUIRED', 'Codespace scope required', stderr),
+        authenticated: true,
+        hasCodespaceScope: false,
+        error: new GhCliError('SCOPE_REQUIRED', vscode.l10n.t('Codespace scope required'), stderr),
       };
     }
 
     // If gh auth status exits non-zero but stderr doesn't indicate auth failure,
-    // it might still be authenticated
+    // it might still be authenticated - check for codespace scope
     if (stderr.includes('Logged in to')) {
-      return { authenticated: true };
+      const hasCodespaceScope = stderr.includes("'codespace'");
+      if (!hasCodespaceScope) {
+        return {
+          authenticated: true,
+          hasCodespaceScope: false,
+          error: new GhCliError('SCOPE_REQUIRED', vscode.l10n.t('Codespace scope required')),
+        };
+      }
+      return { authenticated: true, hasCodespaceScope: true };
     }
 
     return {
       authenticated: false,
+      hasCodespaceScope: false,
       error: new GhCliError('NOT_AUTHENTICATED', 'Authentication check failed', stderr),
     };
   }
@@ -203,6 +231,46 @@ export async function getSshConfig(codespaceName: string): Promise<string> {
   validateCodespaceName(codespaceName);
   const result = await runGh(['codespace', 'ssh', '--config', '-c', codespaceName], 60000);
   return result.stdout;
+}
+
+/**
+ * Probes SSH readiness by running a trivial command on the codespace.
+ * Retries up to maxAttempts times with a delay between attempts.
+ * This helps avoid race conditions where the codespace API reports 'Available'
+ * but the container isn't fully ready to accept SSH connections.
+ * @param codespaceName - The name of the codespace
+ * @param maxAttempts - Maximum number of attempts (default: 3)
+ * @param delayMs - Delay between attempts in milliseconds (default: 3000)
+ * @param log - Optional logging function
+ * @throws {GhCliError} If SSH is not ready after all attempts
+ */
+export async function waitForSshReady(
+  codespaceName: string,
+  maxAttempts = 3,
+  delayMs = 3000,
+  log?: (message: string, error?: Error) => void
+): Promise<void> {
+  validateCodespaceName(codespaceName);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await runGh(['codespace', 'ssh', '-c', codespaceName, '--', 'echo', 'ready'], 30000);
+      return;
+    } catch (error) {
+      if (log) {
+        log(
+          vscode.l10n.t('SSH readiness probe attempt {0}/{1} failed', attempt, maxAttempts),
+          error instanceof Error ? error : undefined
+        );
+      }
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw new GhCliError(
+    'COMMAND_FAILED',
+    vscode.l10n.t('Codespace SSH connection is not ready after {0} attempts', maxAttempts)
+  );
 }
 
 /**

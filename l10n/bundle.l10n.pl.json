@@ -144,5 +144,8 @@
   "Codespace scope required": "Wymagany zakres codespace",
   "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Twój token GitHub wymaga zakresu `codespace` do dostępu do codespaces.\n\nKliknij, aby dodać zakres.",
   "Click to add scope": "Kliknij, aby dodać zakres",
-  "Add Scope": "Dodaj Zakres"
+  "Add Scope": "Dodaj Zakres",
+  "SSH readiness probe attempt {0}/{1} failed": "Próba weryfikacji SSH {0}/{1} nie powiodła się",
+  "Codespace SSH connection is not ready after {0} attempts": "Połączenie SSH codespace nie jest gotowe po {0} próbach",
+  "Verifying SSH connection to {0}...": "Weryfikowanie połączenia SSH z {0}..."
 }

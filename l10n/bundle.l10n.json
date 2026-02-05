@@ -145,5 +145,8 @@
   "Codespace scope required": "Codespace scope required",
   "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.": "Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.",
   "Click to add scope": "Click to add scope",
-  "Add Scope": "Add Scope"
+  "Add Scope": "Add Scope",
+  "SSH readiness probe attempt {0}/{1} failed": "SSH readiness probe attempt {0}/{1} failed",
+  "Codespace SSH connection is not ready after {0} attempts": "Codespace SSH connection is not ready after {0} attempts",
+  "Verifying SSH connection to {0}...": "Verifying SSH connection to {0}..."
 }
