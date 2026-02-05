@@ -122,7 +122,7 @@
         },
         {
           "command": "openSpaces.refresh",
-          "when": "view == openSpaces.codespaceTree",
+          "when": "view == openSpaces.codespaceTree && !openSpaces.insideCodespace",
           "group": "navigation@3"
         }
       ],
