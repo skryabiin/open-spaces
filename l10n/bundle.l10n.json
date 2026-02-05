@@ -148,5 +148,6 @@
   "Add Scope": "Add Scope",
   "SSH readiness probe attempt {0}/{1} failed": "SSH readiness probe attempt {0}/{1} failed",
   "Codespace SSH connection is not ready after {0} attempts": "Codespace SSH connection is not ready after {0} attempts",
-  "Verifying SSH connection to {0}...": "Verifying SSH connection to {0}..."
+  "Verifying SSH connection to {0}...": "Verifying SSH connection to {0}...",
+  "Connected": "Connected"
 }

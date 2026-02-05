@@ -147,5 +147,6 @@
   "Add Scope": "スコープを追加",
   "SSH readiness probe attempt {0}/{1} failed": "SSH 接続確認の試行 {0}/{1} が失敗しました",
   "Codespace SSH connection is not ready after {0} attempts": "{0} 回の試行後も Codespace の SSH 接続が準備できていません",
-  "Verifying SSH connection to {0}...": "{0} への SSH 接続を確認中..."
+  "Verifying SSH connection to {0}...": "{0} への SSH 接続を確認中...",
+  "Connected": "接続済み"
 }

@@ -112,7 +112,7 @@
       "view/title": [
         {
           "command": "openSpaces.create",
-          "when": "view == openSpaces.codespaceTree",
+          "when": "view == openSpaces.codespaceTree && !openSpaces.insideCodespace",
           "group": "navigation@1"
         },
         {
@@ -145,6 +145,11 @@
         {
           "command": "openSpaces.stop",
           "when": "view == openSpaces.codespaceTree && viewItem == codespace-available",
+          "group": "inline@2"
+        },
+        {
+          "command": "openSpaces.stop",
+          "when": "view == openSpaces.codespaceTree && viewItem == codespace-connected",
           "group": "inline@2"
         },
         {

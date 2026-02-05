@@ -73,13 +73,16 @@ export class RepositoryTreeItem extends vscode.TreeItem {
 }
 
 export class CodespaceTreeItem extends vscode.TreeItem {
-  constructor(public readonly codespace: Codespace) {
-    super(codespace.displayName, vscode.TreeItemCollapsibleState.Collapsed);
+  constructor(public readonly codespace: Codespace, connected = false) {
+    super(
+      codespace.displayName,
+      connected ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed
+    );
 
-    this.description = getStateDescription(codespace.state);
+    this.description = connected ? vscode.l10n.t('Connected') : getStateDescription(codespace.state);
     this.iconPath = getStateIcon(codespace.state);
     this.tooltip = this.createTooltip();
-    this.contextValue = `codespace-${codespace.state.toLowerCase()}`;
+    this.contextValue = connected ? 'codespace-connected' : `codespace-${codespace.state.toLowerCase()}`;
   }
 
   private createTooltip(): vscode.MarkdownString {
@@ -253,6 +256,23 @@ export class AuthRequiredTreeItem extends vscode.TreeItem {
     this.command = {
       command: 'openSpaces.openAuthTerminal',
       title: 'Authenticate',
+    };
+  }
+}
+
+export class ScopeRequiredTreeItem extends vscode.TreeItem {
+  constructor() {
+    super(vscode.l10n.t('Codespace scope required'), vscode.TreeItemCollapsibleState.None);
+
+    this.iconPath = new vscode.ThemeIcon('shield', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+    this.tooltip = new vscode.MarkdownString(
+      vscode.l10n.t('Your GitHub token needs the `codespace` scope to access codespaces.\n\nClick to add the scope.')
+    );
+    this.contextValue = 'scope-required';
+    this.description = vscode.l10n.t('Click to add scope');
+    this.command = {
+      command: 'openSpaces.addCodespaceScope',
+      title: vscode.l10n.t('Add Scope'),
     };
   }
 }

@@ -147,5 +147,6 @@
   "Add Scope": "Aggiungi Ambito",
   "SSH readiness probe attempt {0}/{1} failed": "Tentativo di verifica SSH {0}/{1} fallito",
   "Codespace SSH connection is not ready after {0} attempts": "La connessione SSH del codespace non è pronta dopo {0} tentativi",
-  "Verifying SSH connection to {0}...": "Verifica connessione SSH a {0}..."
+  "Verifying SSH connection to {0}...": "Verifica connessione SSH a {0}...",
+  "Connected": "Connesso"
 }

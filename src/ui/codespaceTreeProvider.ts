@@ -10,6 +10,7 @@ import {
   CodespaceDetailItem,
   GhNotInstalledTreeItem,
   AuthRequiredTreeItem,
+  ScopeRequiredTreeItem,
   NoCodespacesTreeItem,
   LoadingTreeItem,
   ErrorTreeItem,
@@ -21,6 +22,7 @@ type TreeItem =
   | CodespaceDetailItem
   | GhNotInstalledTreeItem
   | AuthRequiredTreeItem
+  | ScopeRequiredTreeItem
   | NoCodespacesTreeItem
   | LoadingTreeItem
   | ErrorTreeItem;
@@ -34,6 +36,7 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
   private error: GhCliError | Error | null = null;
   private ghInstalled = true;
   private authenticated = true;
+  private hasCodespaceScope = true;
 
   private isPolling = false;
   private pollTimer: NodeJS.Timeout | null = null;
@@ -43,7 +46,13 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
   private backgroundRefreshInterval = 60000;
   private isVisible = false;
 
+  private connectedCodespaceName: string | undefined;
+
   constructor() {}
+
+  setConnectedCodespace(name: string): void {
+    this.connectedCodespaceName = name;
+  }
 
   refresh(): void {
     this.loading = true;
@@ -65,6 +74,7 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
       if (!prereq.ready) {
         this.ghInstalled = prereq.ghInstalled;
         this.authenticated = prereq.authenticated;
+        this.hasCodespaceScope = prereq.hasCodespaceScope;
         this.error = prereq.error || null;
         this.codespaces = [];
         this.loading = false;
@@ -74,9 +84,15 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
 
       this.ghInstalled = true;
       this.authenticated = true;
+      this.hasCodespaceScope = true;
 
       // Load codespaces
-      this.codespaces = await ghCli.listCodespaces();
+      if (this.connectedCodespaceName) {
+        const cs = await ghCli.getCodespace(this.connectedCodespaceName);
+        this.codespaces = cs ? [cs] : [];
+      } else {
+        this.codespaces = await ghCli.listCodespaces();
+      }
 
       // Fetch additional info for running codespaces (idle timeout, machine specs)
       const runningCodespaces = this.codespaces.filter((cs) => cs.state === 'Available');
@@ -210,12 +226,23 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
       return Promise.resolve([new AuthRequiredTreeItem(message)]);
     }
 
+    if (!this.hasCodespaceScope) {
+      return Promise.resolve([new ScopeRequiredTreeItem()]);
+    }
+
     if (this.error) {
       return Promise.resolve([new ErrorTreeItem(this.error.message)]);
     }
 
     if (this.codespaces.length === 0) {
       return Promise.resolve([new NoCodespacesTreeItem()]);
+    }
+
+    // When connected to a codespace, show it directly without repo grouping
+    if (this.connectedCodespaceName) {
+      return Promise.resolve(
+        this.codespaces.map((cs) => new CodespaceTreeItem(cs, true))
+      );
     }
 
     // Group codespaces by repository

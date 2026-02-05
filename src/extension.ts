@@ -151,6 +151,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Create tree provider
   treeProvider = new CodespaceTreeProvider();
 
+  // When inside a codespace, only show the connected codespace
+  const connectedCodespaceName = getCodespaceName();
+  if (connectedCodespaceName) {
+    treeProvider.setConnectedCodespace(connectedCodespaceName);
+  }
+
   // Register tree view
   const treeView = vscode.window.createTreeView('openSpaces.codespaceTree', {
     treeDataProvider: treeProvider,
