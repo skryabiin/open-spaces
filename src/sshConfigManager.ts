@@ -232,6 +232,22 @@ export function clearEntries(): void {
 }
 
 /**
+ * Returns the SSH host from the managed section, if any.
+ * Used to verify the current SSH remote matches a codespace we connected to.
+ */
+export function getManagedHost(): string | undefined {
+  const config = readSshConfig();
+  const startIdx = config.indexOf(MARKER_START);
+  const endIdx = config.indexOf(MARKER_END);
+  if (startIdx === -1 || endIdx === -1) {
+    return undefined;
+  }
+  const managed = config.substring(startIdx, endIdx);
+  const match = managed.match(/Host\s+(\S+)/);
+  return match ? match[1] : undefined;
+}
+
+/**
  * Checks if an SSH identity file exists.
  * @param identityFile - Path to the identity file (supports ~ expansion)
  * @returns True if the identity file exists

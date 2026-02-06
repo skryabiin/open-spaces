@@ -3,6 +3,7 @@ import { CodespaceTreeProvider } from './ui/codespaceTreeProvider';
 import { CodespaceTreeItem } from './ui/treeItems';
 import * as codespaceManager from './codespaceManager';
 import * as ghCli from './ghCli';
+import * as sshConfigManager from './sshConfigManager';
 import { ensureError } from './utils/errors';
 import { Codespace } from './types';
 
@@ -106,8 +107,23 @@ function isInsideCodespace(): boolean {
   );
 }
 
-function getCodespaceName(): string | undefined {
-  return process.env.CODESPACE_NAME;
+function getConnectedCodespaceName(context: vscode.ExtensionContext): string | undefined {
+  if (vscode.env.remoteName !== 'ssh-remote') {
+    return undefined;
+  }
+
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    return undefined;
+  }
+
+  const remoteHost = folders[0].uri.authority.replace('ssh-remote+', '');
+  const managedHost = sshConfigManager.getManagedHost();
+  if (remoteHost && managedHost && remoteHost === managedHost) {
+    return context.globalState.get<string>('connectedCodespaceName');
+  }
+
+  return undefined;
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -151,8 +167,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Create tree provider
   treeProvider = new CodespaceTreeProvider();
 
-  // When inside a codespace, only show the connected codespace
-  const connectedCodespaceName = getCodespaceName();
+  // When connected to a codespace, only show that codespace
+  const connectedCodespaceName = getConnectedCodespaceName(context);
   if (connectedCodespaceName) {
     treeProvider.setConnectedCodespace(connectedCodespaceName);
   }
@@ -189,8 +205,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       try {
+        // Store codespace name before connect (window reloads after openFolder)
+        await context.globalState.update('connectedCodespaceName', codespace.name);
         await codespaceManager.connect(codespace);
       } catch (error) {
+        await context.globalState.update('connectedCodespaceName', undefined);
         const err = ensureError(error);
         log(`Failed to connect to codespace ${codespace.name}`, err);
         void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', err.message));
@@ -371,7 +390,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('openSpaces.disconnect', async () => {
-      const codespaceName = getCodespaceName();
+      const codespaceName = getConnectedCodespaceName(context);
       const message = codespaceName
         ? vscode.l10n.t('Disconnect from codespace {0}?', codespaceName)
         : vscode.l10n.t('Disconnect from remote?');
@@ -383,7 +402,7 @@ export function activate(context: vscode.ExtensionContext) {
       );
 
       if (confirmed === vscode.l10n.t('Disconnect')) {
-        // Close the remote connection
+        await context.globalState.update('connectedCodespaceName', undefined);
         await vscode.commands.executeCommand('workbench.action.remote.close');
       }
     })
