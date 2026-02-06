@@ -4,6 +4,7 @@ import * as codespaceManager from '../codespaceManager';
 import { Codespace, GhCliError } from '../types';
 import { isTransitionalState } from '../constants';
 import { ensureError } from '../utils/errors';
+import { findStaleCodespaces } from '../staleDetector';
 import {
   RepositoryTreeItem,
   CodespaceTreeItem,
@@ -14,6 +15,7 @@ import {
   NoCodespacesTreeItem,
   LoadingTreeItem,
   ErrorTreeItem,
+  NoFilterResultsTreeItem,
 } from './treeItems';
 
 type TreeItem =
@@ -25,7 +27,8 @@ type TreeItem =
   | ScopeRequiredTreeItem
   | NoCodespacesTreeItem
   | LoadingTreeItem
-  | ErrorTreeItem;
+  | ErrorTreeItem
+  | NoFilterResultsTreeItem;
 
 export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeItem | undefined | null | void>();
@@ -40,15 +43,40 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
 
   private isPolling = false;
   private pollTimer: NodeJS.Timeout | null = null;
-  private pollInterval = 5000;
+  private pollInterval: number;
 
   private backgroundRefreshTimer: NodeJS.Timeout | null = null;
-  private backgroundRefreshInterval = 60000;
+  private backgroundRefreshInterval: number;
   private isVisible = false;
 
   private connectedCodespaceName: string | undefined;
 
-  constructor() {}
+  // Filter state
+  private filterText = '';
+  private filterState: 'all' | 'running' | 'stopped' = 'all';
+
+  constructor() {
+    const config = vscode.workspace.getConfiguration('openSpaces');
+    this.pollInterval = config.get<number>('pollingInterval', 5000);
+    this.backgroundRefreshInterval = config.get<number>('backgroundRefreshInterval', 60000);
+
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('openSpaces.pollingInterval')) {
+        this.pollInterval = vscode.workspace
+          .getConfiguration('openSpaces')
+          .get<number>('pollingInterval', 5000);
+      }
+      if (e.affectsConfiguration('openSpaces.backgroundRefreshInterval')) {
+        this.backgroundRefreshInterval = vscode.workspace
+          .getConfiguration('openSpaces')
+          .get<number>('backgroundRefreshInterval', 60000);
+        this.stopBackgroundRefresh();
+        if (this.isVisible) {
+          this.startBackgroundRefresh();
+        }
+      }
+    });
+  }
 
   setConnectedCodespace(name: string): void {
     this.connectedCodespaceName = name;
@@ -245,9 +273,22 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
       );
     }
 
+    // Apply filters
+    const filteredCodespaces = this.applyFilters(this.codespaces);
+
+    if (filteredCodespaces.length === 0 && this.hasActiveFilters()) {
+      return Promise.resolve([new NoFilterResultsTreeItem()]);
+    }
+
+    // Compute stale codespace names
+    const config = vscode.workspace.getConfiguration('openSpaces');
+    const staleThreshold = config.get<number>('staleThresholdDays', 14);
+    const staleCodespaces = findStaleCodespaces(filteredCodespaces, staleThreshold);
+    const staleNames = new Set(staleCodespaces.map((cs) => cs.name));
+
     // Group codespaces by repository
     const repoMap = new Map<string, Codespace[]>();
-    for (const cs of this.codespaces) {
+    for (const cs of filteredCodespaces) {
       const repo = cs.repository || 'Unknown';
       const existing = repoMap.get(repo);
       if (existing) {
@@ -278,12 +319,64 @@ export class CodespaceTreeProvider implements vscode.TreeDataProvider<TreeItem> 
     });
 
     return Promise.resolve(
-      sortedRepos.map(([repo, codespaces]) => new RepositoryTreeItem(repo, codespaces))
+      sortedRepos.map(([repo, codespaces]) => new RepositoryTreeItem(repo, codespaces, staleNames))
     );
   }
 
   getCodespaceByName(name: string): Codespace | undefined {
     return this.codespaces.find((cs) => cs.name === name);
+  }
+
+  getAllCodespaces(): Codespace[] {
+    return this.codespaces;
+  }
+
+  getConnectedCodespace(): Codespace | undefined {
+    if (!this.connectedCodespaceName) {
+      return undefined;
+    }
+    return this.codespaces.find((cs) => cs.name === this.connectedCodespaceName);
+  }
+
+  setFilterText(text: string): void {
+    this.filterText = text.toLowerCase();
+    this._onDidChangeTreeData.fire();
+  }
+
+  setFilterState(state: 'all' | 'running' | 'stopped'): void {
+    this.filterState = state;
+    this._onDidChangeTreeData.fire();
+  }
+
+  clearFilters(): void {
+    this.filterText = '';
+    this.filterState = 'all';
+    this._onDidChangeTreeData.fire();
+  }
+
+  private applyFilters(codespaces: Codespace[]): Codespace[] {
+    let filtered = codespaces;
+
+    if (this.filterState === 'running') {
+      filtered = filtered.filter((cs) => cs.state === 'Available');
+    } else if (this.filterState === 'stopped') {
+      filtered = filtered.filter((cs) => cs.state === 'Shutdown');
+    }
+
+    if (this.filterText) {
+      filtered = filtered.filter(
+        (cs) =>
+          cs.displayName.toLowerCase().includes(this.filterText) ||
+          cs.repository.toLowerCase().includes(this.filterText) ||
+          cs.branch.toLowerCase().includes(this.filterText)
+      );
+    }
+
+    return filtered;
+  }
+
+  private hasActiveFilters(): boolean {
+    return this.filterText !== '' || this.filterState !== 'all';
   }
 
   dispose(): void {

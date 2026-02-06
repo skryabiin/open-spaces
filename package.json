@@ -29,6 +29,97 @@
     "onView:openSpaces.codespaceTree"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Open Spaces",
+      "properties": {
+        "openSpaces.sshConfigPath": {
+          "type": "string",
+          "default": "~/.ssh/config",
+          "description": "%config.sshConfigPath.description%",
+          "scope": "machine"
+        },
+        "openSpaces.pollingInterval": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "description": "%config.pollingInterval.description%",
+          "scope": "window"
+        },
+        "openSpaces.backgroundRefreshInterval": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 10000,
+          "description": "%config.backgroundRefreshInterval.description%",
+          "scope": "window"
+        },
+        "openSpaces.sshProbeRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%config.sshProbeRetries.description%",
+          "scope": "window"
+        },
+        "openSpaces.sshProbeDelay": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 500,
+          "description": "%config.sshProbeDelay.description%",
+          "scope": "window"
+        },
+        "openSpaces.defaultMachineType": {
+          "type": "string",
+          "default": "",
+          "description": "%config.defaultMachineType.description%",
+          "scope": "resource"
+        },
+        "openSpaces.defaultIdleTimeout": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "%config.defaultIdleTimeout.description%",
+          "scope": "resource"
+        },
+        "openSpaces.staleThresholdDays": {
+          "type": "number",
+          "default": 14,
+          "minimum": 1,
+          "description": "%config.staleThresholdDays.description%",
+          "scope": "window"
+        },
+        "openSpaces.detectStaleCodespaces": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.detectStaleCodespaces.description%",
+          "scope": "window"
+        },
+        "openSpaces.connectionCheckInterval": {
+          "type": "number",
+          "default": 30,
+          "minimum": 10,
+          "description": "%config.connectionCheckInterval.description%",
+          "scope": "window"
+        },
+        "openSpaces.templates": {
+          "type": "array",
+          "default": [],
+          "description": "%config.templates.description%",
+          "scope": "application",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "repo": { "type": "string" },
+              "branch": { "type": "string" },
+              "machineType": { "type": "string" },
+              "idleTimeoutMinutes": { "type": "number" },
+              "displayName": { "type": "string" }
+            },
+            "required": ["name", "repo"]
+          }
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -42,7 +133,8 @@
       "openSpaces": [
         {
           "id": "openSpaces.codespaceTree",
-          "name": "%views.codespaceTree.name%"
+          "name": "%views.codespaceTree.name%",
+          "canSelectMany": true
         }
       ]
     },
@@ -106,6 +198,45 @@
         "command": "openSpaces.addCodespaceScope",
         "title": "%command.addCodespaceScope.title%",
         "icon": "$(shield)"
+      },
+      {
+        "command": "openSpaces.statusBarActions",
+        "title": "%command.statusBarActions.title%"
+      },
+      {
+        "command": "openSpaces.filterByText",
+        "title": "%command.filterByText.title%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "openSpaces.filterByState",
+        "title": "%command.filterByState.title%",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "openSpaces.clearFilters",
+        "title": "%command.clearFilters.title%",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "openSpaces.bulkStop",
+        "title": "%command.bulkStop.title%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "openSpaces.bulkDelete",
+        "title": "%command.bulkDelete.title%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "openSpaces.manageTemplates",
+        "title": "%command.manageTemplates.title%",
+        "icon": "$(notebook-template)"
+      },
+      {
+        "command": "openSpaces.previewDevcontainer",
+        "title": "%command.previewDevcontainer.title%",
+        "icon": "$(file-code)"
       }
     ],
     "menus": {
@@ -124,6 +255,16 @@
           "command": "openSpaces.refresh",
           "when": "view == openSpaces.codespaceTree && !openSpaces.insideCodespace",
           "group": "navigation@3"
+        },
+        {
+          "command": "openSpaces.filterByText",
+          "when": "view == openSpaces.codespaceTree && !openSpaces.insideCodespace",
+          "group": "navigation@4"
+        },
+        {
+          "command": "openSpaces.filterByState",
+          "when": "view == openSpaces.codespaceTree && !openSpaces.insideCodespace",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -186,6 +327,21 @@
           "command": "openSpaces.delete",
           "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/",
           "group": "danger"
+        },
+        {
+          "command": "openSpaces.bulkStop",
+          "when": "view == openSpaces.codespaceTree && viewItem == codespace-available && listMultipleSelection",
+          "group": "inline@3"
+        },
+        {
+          "command": "openSpaces.bulkDelete",
+          "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/ && listMultipleSelection",
+          "group": "danger@2"
+        },
+        {
+          "command": "openSpaces.previewDevcontainer",
+          "when": "view == openSpaces.codespaceTree && viewItem =~ /^codespace-/",
+          "group": "navigation@4"
         }
       ]
     }
@@ -194,6 +350,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -202,12 +360,16 @@
     "publish:vscode": "vsce publish"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.6",
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.9",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "@vscode/vsce": "^3.7.1",
     "eslint": "^8.54.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
     "ovsx": "^0.10.8",
     "prettier": "^3.0.0",
     "typescript": "^5.3.0"

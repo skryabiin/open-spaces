@@ -5,6 +5,8 @@ import { Codespace, GhCliError } from './types';
 import { log } from './extension';
 import { isTransitionalState } from './constants';
 import { formatBytes } from './utils/formatting';
+import { getHourlyPrice, formatPrice } from './utils/pricing';
+import { getTemplates, saveTemplate, CodespaceTemplate } from './templateManager';
 
 export interface PrerequisiteResult {
   ready: boolean;
@@ -189,6 +191,9 @@ export async function connect(codespace: Codespace): Promise<void> {
   sshConfigManager.setEntry(entry);
 
   // Probe SSH readiness before handing off to remote-ssh
+  const probeConfig = vscode.workspace.getConfiguration('openSpaces');
+  const sshProbeRetries = probeConfig.get<number>('sshProbeRetries', 3);
+  const sshProbeDelay = probeConfig.get<number>('sshProbeDelay', 3000);
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -196,7 +201,7 @@ export async function connect(codespace: Codespace): Promise<void> {
       cancellable: false,
     },
     async () => {
-      await ghCli.waitForSshReady(codespace.name, 3, 3000, log);
+      await ghCli.waitForSshReady(codespace.name, sshProbeRetries, sshProbeDelay, log);
     }
   );
 
@@ -393,155 +398,212 @@ export async function deleteCodespace(codespace: Codespace): Promise<void> {
  * @returns The name of the created codespace, or undefined if cancelled
  */
 export async function createCodespace(): Promise<string | undefined> {
-  // Step 1: Select repository
-  const repos = await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: vscode.l10n.t('Loading repositories (this may take a moment)...'),
-      cancellable: false,
-    },
-    async () => {
-      return await ghCli.listRepositories();
-    }
-  );
+  // Step 0: Check for templates
+  const templates = getTemplates();
+  let selectedTemplate: CodespaceTemplate | undefined;
 
-  const repoItems: vscode.QuickPickItem[] = repos.map((repo) => ({
-    label: repo.nameWithOwner,
-    description: repo.isPrivate ? vscode.l10n.t('$(lock) Private') : vscode.l10n.t('$(globe) Public'),
-    detail: repo.description || undefined,
-  }));
-
-  // Add option to enter repository manually
-  repoItems.push({
-    label: vscode.l10n.t('$(edit) Enter repository manually...'),
-    description: '',
-    detail: vscode.l10n.t('Type owner/repo to use a repository not in the list'),
-    alwaysShow: true,
-  });
-
-  const selectedRepo = await vscode.window.showQuickPick(repoItems, {
-    placeHolder: vscode.l10n.t('Select a repository or enter manually'),
-    title: vscode.l10n.t('Create Codespace - Select Repository'),
-  });
-
-  if (!selectedRepo) {
-    return undefined;
-  }
-
-  let repo: string;
-  if (selectedRepo.label === vscode.l10n.t('$(edit) Enter repository manually...')) {
-    const manualRepo = await vscode.window.showInputBox({
-      prompt: vscode.l10n.t('Enter the repository (owner/repo)'),
-      placeHolder: 'owner/repo',
-      title: vscode.l10n.t('Create Codespace - Enter Repository'),
-      validateInput: (value) => {
-        if (!value || !value.includes('/')) {
-          return vscode.l10n.t('Please enter in format: owner/repo');
-        }
-        return undefined;
-      },
-    });
-
-    if (!manualRepo) {
-      return undefined;
-    }
-    repo = manualRepo;
-  } else {
-    repo = selectedRepo.label;
-  }
-
-  // Step 2: Select branch
-  let branches: ghCli.Branch[] = [];
-  try {
-    branches = await vscode.window.withProgress(
+  if (templates.length > 0) {
+    const templateItems: vscode.QuickPickItem[] = [
       {
-        location: vscode.ProgressLocation.Notification,
-        title: vscode.l10n.t('Loading branches...'),
-        cancellable: false,
+        label: vscode.l10n.t('$(add) Create from scratch'),
+        description: vscode.l10n.t('Configure all options manually'),
       },
-      async () => {
-        return await ghCli.listBranches(repo);
-      }
-    );
-  } catch (error) {
-    log('Failed to load branches, using default', error instanceof Error ? error : undefined);
-  }
-
-  let selectedBranch: string | undefined;
-  if (branches.length > 0) {
-    const branchItems: vscode.QuickPickItem[] = [
-      { label: vscode.l10n.t('$(git-branch) Default branch'), description: vscode.l10n.t('Use the repository default branch') },
-      ...branches.map((branch) => ({
-        label: branch.name,
-        description: '',
+      ...templates.map((t) => ({
+        label: t.name,
+        description: t.repo,
+        detail: [
+          t.branch ? vscode.l10n.t('Branch: {0}', t.branch) : '',
+          t.machineType || '',
+        ]
+          .filter(Boolean)
+          .join(' • '),
       })),
     ];
 
-    const branchSelection = await vscode.window.showQuickPick(branchItems, {
-      placeHolder: vscode.l10n.t('Select a branch'),
-      title: vscode.l10n.t('Create Codespace - Select Branch'),
+    const templateSelection = await vscode.window.showQuickPick(templateItems, {
+      placeHolder: vscode.l10n.t('Select a template or create from scratch'),
+      title: vscode.l10n.t('Create Codespace'),
     });
 
-    if (!branchSelection) {
+    if (!templateSelection) {
       return undefined;
     }
 
-    if (!branchSelection.label.startsWith('$(git-branch)')) {
-      selectedBranch = branchSelection.label;
+    if (!templateSelection.label.startsWith('$(add)')) {
+      selectedTemplate = templates.find((t) => t.name === templateSelection.label);
+    }
+  }
+
+  const config = vscode.workspace.getConfiguration('openSpaces');
+  const defaultMachineType = config.get<string>('defaultMachineType', '');
+  const defaultIdleTimeout = config.get<number>('defaultIdleTimeout', 0);
+
+  // Step 1: Select repository (skip if template provides one)
+  let repo: string;
+  if (selectedTemplate?.repo) {
+    repo = selectedTemplate.repo;
+  } else {
+    const repos = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: vscode.l10n.t('Loading repositories (this may take a moment)...'),
+        cancellable: false,
+      },
+      async () => {
+        return await ghCli.listRepositories();
+      }
+    );
+
+    const repoItems: vscode.QuickPickItem[] = repos.map((r) => ({
+      label: r.nameWithOwner,
+      description: r.isPrivate ? vscode.l10n.t('$(lock) Private') : vscode.l10n.t('$(globe) Public'),
+      detail: r.description || undefined,
+    }));
+
+    // Add option to enter repository manually
+    repoItems.push({
+      label: vscode.l10n.t('$(edit) Enter repository manually...'),
+      description: '',
+      detail: vscode.l10n.t('Type owner/repo to use a repository not in the list'),
+      alwaysShow: true,
+    });
+
+    const selectedRepo = await vscode.window.showQuickPick(repoItems, {
+      placeHolder: vscode.l10n.t('Select a repository or enter manually'),
+      title: vscode.l10n.t('Create Codespace - Select Repository'),
+    });
+
+    if (!selectedRepo) {
+      return undefined;
+    }
+
+    if (selectedRepo.label === vscode.l10n.t('$(edit) Enter repository manually...')) {
+      const manualRepo = await vscode.window.showInputBox({
+        prompt: vscode.l10n.t('Enter the repository (owner/repo)'),
+        placeHolder: 'owner/repo',
+        title: vscode.l10n.t('Create Codespace - Enter Repository'),
+        validateInput: (value) => {
+          if (!value || !value.includes('/')) {
+            return vscode.l10n.t('Please enter in format: owner/repo');
+          }
+          return undefined;
+        },
+      });
+
+      if (!manualRepo) {
+        return undefined;
+      }
+      repo = manualRepo;
+    } else {
+      repo = selectedRepo.label;
+    }
+  }
+
+  // Step 2: Select branch (skip if template provides one)
+  let selectedBranch: string | undefined = selectedTemplate?.branch;
+  if (!selectedBranch) {
+    let branches: ghCli.Branch[] = [];
+    try {
+      branches = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: vscode.l10n.t('Loading branches...'),
+          cancellable: false,
+        },
+        async () => {
+          return await ghCli.listBranches(repo);
+        }
+      );
+    } catch (error) {
+      log('Failed to load branches, using default', error instanceof Error ? error : undefined);
+    }
+
+    if (branches.length > 0) {
+      const branchItems: vscode.QuickPickItem[] = [
+        { label: vscode.l10n.t('$(git-branch) Default branch'), description: vscode.l10n.t('Use the repository default branch') },
+        ...branches.map((branch) => ({
+          label: branch.name,
+          description: '',
+        })),
+      ];
+
+      const branchSelection = await vscode.window.showQuickPick(branchItems, {
+        placeHolder: vscode.l10n.t('Select a branch'),
+        title: vscode.l10n.t('Create Codespace - Select Branch'),
+      });
+
+      if (!branchSelection) {
+        return undefined;
+      }
+
+      if (!branchSelection.label.startsWith('$(git-branch)')) {
+        selectedBranch = branchSelection.label;
+      }
     }
   }
 
   // Step 3: Select machine type
-  let machineTypes: ghCli.MachineType[] = [];
-  try {
-    machineTypes = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: vscode.l10n.t('Loading machine types...'),
-        cancellable: false,
-      },
-      async () => {
-        return await ghCli.listMachineTypes(repo, selectedBranch);
-      }
-    );
-  } catch (error) {
-    log('Failed to load machine types, using default', error instanceof Error ? error : undefined);
-  }
-
-  let selectedMachine: string | undefined;
-  if (machineTypes.length > 0) {
-    const machineItems: vscode.QuickPickItem[] = [
-      { label: vscode.l10n.t('$(server) Default'), description: vscode.l10n.t('Use the repository default machine type') },
-      ...machineTypes.map((machine) => ({
-        label: machine.displayName,
-        description: vscode.l10n.t('{0} cores, {1} RAM, {2} storage', machine.cpus, formatBytes(machine.memoryInBytes), formatBytes(machine.storageInBytes)),
-        detail: machine.name,
-      })),
-    ];
-
-    const machineSelection = await vscode.window.showQuickPick(machineItems, {
-      placeHolder: vscode.l10n.t('Select a machine type'),
-      title: vscode.l10n.t('Create Codespace - Select Machine Type'),
-    });
-
-    if (!machineSelection) {
-      return undefined;
+  let selectedMachine: string | undefined = selectedTemplate?.machineType;
+  if (!selectedMachine) {
+    let machineTypes: ghCli.MachineType[] = [];
+    try {
+      machineTypes = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: vscode.l10n.t('Loading machine types...'),
+          cancellable: false,
+        },
+        async () => {
+          return await ghCli.listMachineTypes(repo, selectedBranch);
+        }
+      );
+    } catch (error) {
+      log('Failed to load machine types, using default', error instanceof Error ? error : undefined);
     }
 
-    if (!machineSelection.label.startsWith('$(server)')) {
-      selectedMachine = machineSelection.detail;
+    if (machineTypes.length > 0) {
+      const machineItems: vscode.QuickPickItem[] = [
+        { label: vscode.l10n.t('$(server) Default'), description: vscode.l10n.t('Use the repository default machine type') },
+        ...machineTypes.map((machine) => {
+          const price = getHourlyPrice(machine.cpus);
+          const costStr = price !== null ? ` • ${formatPrice(price)}` : '';
+          return {
+            label: machine.displayName,
+            description: vscode.l10n.t('{0} cores, {1} RAM, {2} storage', machine.cpus, formatBytes(machine.memoryInBytes), formatBytes(machine.storageInBytes)) + costStr,
+            detail: machine.name,
+            picked: defaultMachineType ? machine.name === defaultMachineType : false,
+          };
+        }),
+      ];
+
+      const machineSelection = await vscode.window.showQuickPick(machineItems, {
+        placeHolder: vscode.l10n.t('Select a machine type'),
+        title: vscode.l10n.t('Create Codespace - Select Machine Type'),
+      });
+
+      if (!machineSelection) {
+        return undefined;
+      }
+
+      if (!machineSelection.label.startsWith('$(server)')) {
+        selectedMachine = machineSelection.detail;
+      }
     }
   }
 
   // Step 4: Optional display name
   const displayName = await vscode.window.showInputBox({
     prompt: vscode.l10n.t('Enter a display name for the codespace'),
-    placeHolder: vscode.l10n.t('Generated if left blank'),
+    placeHolder: selectedTemplate?.displayName || vscode.l10n.t('Generated if left blank'),
     title: vscode.l10n.t('Create Codespace - Display Name'),
+    value: selectedTemplate?.displayName || '',
   });
 
   // User pressed Escape on optional field - continue with creation
   // (showInputBox returns undefined for Escape, empty string for Enter with no input)
+
+  // Determine idle timeout
+  const idleTimeout = selectedTemplate?.idleTimeoutMinutes || defaultIdleTimeout || undefined;
 
   // Create the codespace
   const codespaceName = await vscode.window.withProgress(
@@ -556,10 +618,40 @@ export async function createCodespace(): Promise<string | undefined> {
         branch: selectedBranch,
         machineType: selectedMachine,
         displayName: displayName || undefined,
+        idleTimeoutMinutes: idleTimeout,
       });
     }
   );
 
   void vscode.window.showInformationMessage(vscode.l10n.t('Codespace created: {0}', codespaceName));
+
+  // Offer to save as template if not already using one
+  if (!selectedTemplate) {
+    const saveAsTemplate = await vscode.window.showInformationMessage(
+      vscode.l10n.t('Save this configuration as a template?'),
+      vscode.l10n.t('Save Template'),
+      vscode.l10n.t('No')
+    );
+
+    if (saveAsTemplate === vscode.l10n.t('Save Template')) {
+      const templateName = await vscode.window.showInputBox({
+        prompt: vscode.l10n.t('Enter a name for the template'),
+        placeHolder: vscode.l10n.t('My Template'),
+        title: vscode.l10n.t('Save Template'),
+      });
+
+      if (templateName) {
+        await saveTemplate({
+          name: templateName,
+          repo,
+          branch: selectedBranch,
+          machineType: selectedMachine,
+          idleTimeoutMinutes: idleTimeout,
+          displayName: displayName || undefined,
+        });
+      }
+    }
+  }
+
   return codespaceName;
 }

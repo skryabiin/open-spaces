@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Codespace, CodespaceState } from '../types';
 import { formatBytes, formatMachineSpecs, getTimeAgo, getIdleTimeRemaining } from '../utils/formatting';
+import { getHourlyPrice, formatPrice } from '../utils/pricing';
 
 function getStateIcon(state: CodespaceState): vscode.ThemeIcon {
   switch (state) {
@@ -56,7 +57,8 @@ function getStateDescription(state: CodespaceState): string {
 export class RepositoryTreeItem extends vscode.TreeItem {
   constructor(
     public readonly repository: string,
-    public readonly codespaces: Codespace[]
+    public readonly codespaces: Codespace[],
+    private readonly staleNames: Set<string> = new Set()
   ) {
     super(repository, vscode.TreeItemCollapsibleState.Expanded);
 
@@ -68,18 +70,28 @@ export class RepositoryTreeItem extends vscode.TreeItem {
   }
 
   getChildren(): CodespaceTreeItem[] {
-    return this.codespaces.map((cs) => new CodespaceTreeItem(cs));
+    return this.codespaces.map(
+      (cs) => new CodespaceTreeItem(cs, false, this.staleNames.has(cs.name))
+    );
   }
 }
 
 export class CodespaceTreeItem extends vscode.TreeItem {
-  constructor(public readonly codespace: Codespace, connected = false) {
+  constructor(
+    public readonly codespace: Codespace,
+    connected = false,
+    public readonly isStale = false
+  ) {
     super(
       codespace.displayName,
       connected ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed
     );
 
-    this.description = connected ? vscode.l10n.t('Connected') : getStateDescription(codespace.state);
+    let description = connected ? vscode.l10n.t('Connected') : getStateDescription(codespace.state);
+    if (isStale) {
+      description += ` • ${vscode.l10n.t('Stale')}`;
+    }
+    this.description = description;
     this.iconPath = getStateIcon(codespace.state);
     this.tooltip = this.createTooltip();
     this.contextValue = connected ? 'codespace-connected' : `codespace-${codespace.state.toLowerCase()}`;
@@ -95,6 +107,10 @@ export class CodespaceTreeItem extends vscode.TreeItem {
       md.appendMarkdown(`- ${vscode.l10n.t('Machine: {0}', formatMachineSpecs(this.codespace.machineInfo))}\n`);
       if (this.codespace.machineInfo.storageInBytes > 0) {
         md.appendMarkdown(`- ${vscode.l10n.t('Storage: {0}', formatBytes(this.codespace.machineInfo.storageInBytes))}\n`);
+      }
+      const price = getHourlyPrice(this.codespace.machineInfo.cpus);
+      if (price !== null) {
+        md.appendMarkdown(`- ${vscode.l10n.t('Estimated cost: {0}', formatPrice(price))}\n`);
       }
     } else {
       md.appendMarkdown(`- ${vscode.l10n.t('Machine: {0}', this.codespace.machineName || vscode.l10n.t('N/A'))}\n`);
@@ -175,6 +191,11 @@ export class CodespaceTreeItem extends vscode.TreeItem {
             'storage'
           )
         );
+      }
+      // Cost estimation
+      const price = getHourlyPrice(this.codespace.machineInfo.cpus);
+      if (price !== null) {
+        children.push(new CodespaceDetailItem('credit-card', formatPrice(price), 'cost'));
       }
     } else {
       children.push(
@@ -307,5 +328,15 @@ export class ErrorTreeItem extends vscode.TreeItem {
     this.tooltip = message;
     this.description = message;
     this.contextValue = 'error';
+  }
+}
+
+export class NoFilterResultsTreeItem extends vscode.TreeItem {
+  constructor() {
+    super(vscode.l10n.t('No codespaces match filters'), vscode.TreeItemCollapsibleState.None);
+
+    this.iconPath = new vscode.ThemeIcon('search', new vscode.ThemeColor('disabledForeground'));
+    this.contextValue = 'no-filter-results';
+    this.description = vscode.l10n.t('Clear filters to see all');
   }
 }

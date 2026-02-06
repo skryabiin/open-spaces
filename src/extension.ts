@@ -5,12 +5,25 @@ import * as codespaceManager from './codespaceManager';
 import * as ghCli from './ghCli';
 import { ensureError } from './utils/errors';
 import { Codespace } from './types';
+import { findStaleCodespaces, promptStaleCleanup } from './staleDetector';
+import { getTemplates, deleteTemplate } from './templateManager';
+import { DevcontainerContentProvider, previewDevcontainer } from './devcontainerPreview';
+import { ConnectionHealthMonitor } from './connectionHealthMonitor';
+import { formatMachineSpecs } from './utils/formatting';
+import { getIdleTimeRemaining } from './utils/formatting';
 
 let treeProvider: CodespaceTreeProvider;
 let outputChannel: vscode.OutputChannel;
 
 // Auth polling state (module-level for cleanup in deactivate)
 let authPollingInterval: NodeJS.Timeout | null = null;
+
+// Status bar state (module-level for cleanup in deactivate)
+let statusBarItem: vscode.StatusBarItem;
+let statusUpdateInterval: NodeJS.Timeout | null = null;
+
+// Connection health monitor (module-level for cleanup in deactivate)
+let healthMonitor: ConnectionHealthMonitor | null = null;
 
 function stopAuthPolling(): void {
   if (authPollingInterval) {
@@ -110,6 +123,31 @@ function getCodespaceName(): string | undefined {
   return process.env.CODESPACE_NAME;
 }
 
+function updateStatusBar(): void {
+  if (!statusBarItem) {
+    return;
+  }
+  const connected = treeProvider.getConnectedCodespace();
+  if (!connected) {
+    statusBarItem.hide();
+    return;
+  }
+
+  const parts: string[] = [`$(circle-filled) ${connected.displayName}`];
+  if (connected.machineInfo) {
+    parts.push(formatMachineSpecs(connected.machineInfo));
+  }
+  if (connected.state === 'Available' && connected.idleTimeoutMinutes) {
+    const idleInfo = getIdleTimeRemaining(connected.lastUsedAt, connected.idleTimeoutMinutes);
+    if (idleInfo) {
+      parts.push(idleInfo.text);
+    }
+  }
+
+  statusBarItem.text = parts.join(' • ');
+  statusBarItem.show();
+}
+
 export function activate(context: vscode.ExtensionContext) {
   // Create output channel for logging
   outputChannel = vscode.window.createOutputChannel('Open Spaces');
@@ -161,6 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
   const treeView = vscode.window.createTreeView('openSpaces.codespaceTree', {
     treeDataProvider: treeProvider,
     showCollapseAll: false,
+    canSelectMany: true,
   });
 
   context.subscriptions.push(treeView);
@@ -173,6 +212,57 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   treeProvider.setVisible(treeView.visible);
+
+  // --- Status Bar (Feature 2) ---
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBarItem.command = 'openSpaces.statusBarActions';
+  context.subscriptions.push(statusBarItem);
+
+  if (insideCodespace && connectedCodespaceName) {
+    statusUpdateInterval = setInterval(() => updateStatusBar(), 60000);
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.statusBarActions', async () => {
+      const actions = [
+        { label: vscode.l10n.t('$(debug-disconnect) Disconnect'), action: 'disconnect' },
+        { label: vscode.l10n.t('$(debug-stop) Stop Codespace'), action: 'stop' },
+        { label: vscode.l10n.t('$(terminal) Open SSH Terminal'), action: 'terminal' },
+      ];
+      const selected = await vscode.window.showQuickPick(actions, {
+        placeHolder: vscode.l10n.t('Codespace Actions'),
+      });
+      if (!selected) {
+        return;
+      }
+      switch (selected.action) {
+        case 'disconnect':
+          await vscode.commands.executeCommand('openSpaces.disconnect');
+          break;
+        case 'stop': {
+          const cs = treeProvider.getConnectedCodespace();
+          if (cs) {
+            await vscode.commands.executeCommand('openSpaces.stop');
+          }
+          break;
+        }
+        case 'terminal': {
+          const cs = treeProvider.getConnectedCodespace();
+          if (cs) {
+            await codespaceManager.openSshTerminal(cs);
+          }
+          break;
+        }
+      }
+    })
+  );
+
+  // --- Devcontainer Preview (Feature 7) ---
+  const devcontainerProvider = new DevcontainerContentProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('codespace-devcontainer', devcontainerProvider)
+  );
+  context.subscriptions.push(devcontainerProvider);
 
   // Register commands
   context.subscriptions.push(
@@ -404,12 +494,227 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // --- Search & Filter Commands (Feature 3) ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.filterByText', async () => {
+      const text = await vscode.window.showInputBox({
+        placeHolder: vscode.l10n.t('Filter by name, repo, or branch'),
+        title: vscode.l10n.t('Filter Codespaces'),
+      });
+      if (text !== undefined) {
+        treeProvider.setFilterText(text);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.filterByState', async () => {
+      const items = [
+        { label: vscode.l10n.t('All'), state: 'all' as const },
+        { label: vscode.l10n.t('Running'), state: 'running' as const },
+        { label: vscode.l10n.t('Stopped'), state: 'stopped' as const },
+      ];
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: vscode.l10n.t('Filter by state'),
+        title: vscode.l10n.t('Filter Codespaces by State'),
+      });
+      if (selected) {
+        treeProvider.setFilterState(selected.state);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.clearFilters', () => {
+      treeProvider.clearFilters();
+    })
+  );
+
+  // --- Bulk Operations (Feature 4) ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.bulkStop', async (_item?: CodespaceTreeItem, allItems?: CodespaceTreeItem[]) => {
+      const items = allItems?.filter((i) => i.codespace.state === 'Available');
+      if (!items || items.length === 0) {
+        void vscode.window.showInformationMessage(vscode.l10n.t('No running codespaces selected'));
+        return;
+      }
+
+      const confirmed = await vscode.window.showWarningMessage(
+        vscode.l10n.t('Stop {0} codespace(s)?', items.length),
+        { modal: true },
+        vscode.l10n.t('Stop All')
+      );
+
+      if (confirmed !== vscode.l10n.t('Stop All')) {
+        return;
+      }
+
+      let stopped = 0;
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: vscode.l10n.t('Stopping codespaces...'),
+          cancellable: false,
+        },
+        async (progress) => {
+          for (const item of items) {
+            try {
+              progress.report({ message: item.codespace.displayName });
+              await ghCli.stopCodespace(item.codespace.name);
+              await ghCli.waitForState(item.codespace.name, 'Shutdown');
+              stopped++;
+            } catch (error) {
+              const err = ensureError(error);
+              log(`Failed to stop codespace ${item.codespace.name}`, err);
+            }
+          }
+        }
+      );
+
+      treeProvider.refresh();
+      void vscode.window.showInformationMessage(
+        vscode.l10n.t('{0} of {1} codespace(s) stopped', stopped, items.length)
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.bulkDelete', async (_item?: CodespaceTreeItem, allItems?: CodespaceTreeItem[]) => {
+      const items = allItems?.filter((i) => i.codespace);
+      if (!items || items.length === 0) {
+        return;
+      }
+
+      const confirmed = await vscode.window.showWarningMessage(
+        vscode.l10n.t('Delete {0} codespace(s)? This cannot be undone.', items.length),
+        { modal: true },
+        vscode.l10n.t('Delete All')
+      );
+
+      if (confirmed !== vscode.l10n.t('Delete All')) {
+        return;
+      }
+
+      let deleted = 0;
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: vscode.l10n.t('Deleting codespaces...'),
+          cancellable: false,
+        },
+        async (progress) => {
+          for (const item of items) {
+            try {
+              progress.report({ message: item.codespace.displayName });
+              await ghCli.deleteCodespace(item.codespace.name);
+              deleted++;
+            } catch (error) {
+              const err = ensureError(error);
+              log(`Failed to delete codespace ${item.codespace.name}`, err);
+            }
+          }
+        }
+      );
+
+      treeProvider.refresh();
+      void vscode.window.showInformationMessage(
+        vscode.l10n.t('{0} of {1} codespace(s) deleted', deleted, items.length)
+      );
+    })
+  );
+
+  // --- Manage Templates (Feature 5) ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.manageTemplates', async () => {
+      const templates = getTemplates();
+      if (templates.length === 0) {
+        void vscode.window.showInformationMessage(
+          vscode.l10n.t('No templates saved. Create a codespace to save a template.')
+        );
+        return;
+      }
+
+      const items = templates.map((t) => ({
+        label: t.name,
+        description: t.repo,
+        detail: [t.branch, t.machineType].filter(Boolean).join(' • '),
+        template: t,
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: vscode.l10n.t('Select a template to manage'),
+        title: vscode.l10n.t('Manage Templates'),
+      });
+
+      if (!selected) {
+        return;
+      }
+
+      const action = await vscode.window.showQuickPick(
+        [
+          { label: vscode.l10n.t('$(trash) Delete'), action: 'delete' },
+        ],
+        { placeHolder: vscode.l10n.t('Choose action for "{0}"', selected.template.name) }
+      );
+
+      if (action?.action === 'delete') {
+        await deleteTemplate(selected.template.name);
+        void vscode.window.showInformationMessage(
+          vscode.l10n.t('Template "{0}" deleted', selected.template.name)
+        );
+      }
+    })
+  );
+
+  // --- Devcontainer Preview Command (Feature 7) ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSpaces.previewDevcontainer', async (item?: CodespaceTreeItem) => {
+      const codespace = item?.codespace ?? await pickCodespace({ title: vscode.l10n.t('Preview Devcontainer') });
+      if (!codespace) {
+        return;
+      }
+      await previewDevcontainer(codespace, devcontainerProvider);
+    })
+  );
+
   // Initial load
-  void treeProvider.loadCodespaces();
+  void treeProvider.loadCodespaces().then(() => {
+    // Update status bar after initial load
+    if (insideCodespace) {
+      updateStatusBar();
+    }
+
+    // --- Stale Codespace Detection (Feature 8) ---
+    const config = vscode.workspace.getConfiguration('openSpaces');
+    if (config.get<boolean>('detectStaleCodespaces', true)) {
+      const staleThreshold = config.get<number>('staleThresholdDays', 14);
+      const stale = findStaleCodespaces(treeProvider.getAllCodespaces(), staleThreshold);
+      if (stale.length > 0) {
+        void promptStaleCleanup(stale);
+      }
+    }
+  });
+
+  // --- Connection Health Monitor (Feature 9) ---
+  if (insideCodespace && connectedCodespaceName) {
+    const config = vscode.workspace.getConfiguration('openSpaces');
+    const intervalSec = config.get<number>('connectionCheckInterval', 30);
+    healthMonitor = new ConnectionHealthMonitor(connectedCodespaceName, intervalSec * 1000);
+    healthMonitor.start();
+    context.subscriptions.push(healthMonitor);
+  }
 }
 
 export function deactivate() {
   stopAuthPolling();
+  if (statusUpdateInterval) {
+    clearInterval(statusUpdateInterval);
+    statusUpdateInterval = null;
+  }
+  if (healthMonitor) {
+    healthMonitor.dispose();
+    healthMonitor = null;
+  }
   if (treeProvider) {
     treeProvider.dispose();
   }

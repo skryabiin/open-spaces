@@ -1,10 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as vscode from 'vscode';
 import { SshConfigEntry } from './types';
 
-const SSH_CONFIG_PATH = path.join(os.homedir(), '.ssh', 'config');
-const SSH_DIR = path.join(os.homedir(), '.ssh');
+function getSshConfigPath(): string {
+  const config = vscode.workspace.getConfiguration('openSpaces');
+  const configPath = config.get<string>('sshConfigPath', '~/.ssh/config');
+  return configPath.replace(/^~/, os.homedir());
+}
+
+function getSshDir(): string {
+  return path.dirname(getSshConfigPath());
+}
 const MARKER_START = '# >>> Open Spaces';
 const MARKER_END = '# <<< Open Spaces';
 
@@ -25,22 +33,24 @@ function validateSshConfigValue(key: string, value: string): string {
 }
 
 function ensureSshDir(): void {
-  if (!fs.existsSync(SSH_DIR)) {
-    fs.mkdirSync(SSH_DIR, { mode: 0o700 });
+  const sshDir = getSshDir();
+  if (!fs.existsSync(sshDir)) {
+    fs.mkdirSync(sshDir, { mode: 0o700, recursive: true });
   }
 }
 
 function readSshConfig(): string {
   ensureSshDir();
-  if (!fs.existsSync(SSH_CONFIG_PATH)) {
+  const configPath = getSshConfigPath();
+  if (!fs.existsSync(configPath)) {
     return '';
   }
-  return fs.readFileSync(SSH_CONFIG_PATH, 'utf-8');
+  return fs.readFileSync(configPath, 'utf-8');
 }
 
 function writeSshConfig(content: string): void {
   ensureSshDir();
-  fs.writeFileSync(SSH_CONFIG_PATH, content, { mode: 0o600 });
+  fs.writeFileSync(getSshConfigPath(), content, { mode: 0o600 });
 }
 
 /**

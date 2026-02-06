@@ -93,7 +93,7 @@ function parseCodespaceResponse(cs: CodespaceResponse): Codespace {
   };
 }
 
-async function runGh(args: string[], timeout = 30000): Promise<ExecResult> {
+export async function runGh(args: string[], timeout = 30000): Promise<ExecResult> {
   try {
     const result = await execFileAsync('gh', args, {
       timeout,
@@ -668,6 +668,7 @@ export interface CreateCodespaceOptions {
   machineType?: string;
   location?: string;
   displayName?: string;
+  idleTimeoutMinutes?: number;
 }
 
 /**
@@ -690,6 +691,9 @@ export async function createCodespace(options: CreateCodespaceOptions): Promise<
   if (options.displayName) {
     args.push('--display-name', options.displayName);
   }
+  if (options.idleTimeoutMinutes && options.idleTimeoutMinutes > 0) {
+    args.push('--idle-timeout', `${options.idleTimeoutMinutes}m`);
+  }
 
   // Creating a codespace can take a while
   const result = await runGh(args, 300000);
@@ -700,4 +704,27 @@ export async function createCodespace(options: CreateCodespaceOptions): Promise<
     throw new GhCliError('PARSE_ERROR', vscode.l10n.t('No codespace name in response'));
   }
   return codespaceName;
+}
+
+/**
+ * Gets file contents from a GitHub repository via the API.
+ * @param repo - The repository in owner/name format
+ * @param filePath - Path to the file within the repository
+ * @param ref - Optional git ref (branch/tag/sha)
+ * @returns The file contents as a string, or null if not found
+ */
+export async function getFileContents(
+  repo: string,
+  filePath: string,
+  ref?: string
+): Promise<string | null> {
+  const endpoint = ref
+    ? `repos/${repo}/contents/${filePath}?ref=${encodeURIComponent(ref)}`
+    : `repos/${repo}/contents/${filePath}`;
+  try {
+    const result = await runGh(['api', endpoint, '-q', '.content'], 30000);
+    return Buffer.from(result.stdout.trim(), 'base64').toString('utf-8');
+  } catch {
+    return null;
+  }
 }
