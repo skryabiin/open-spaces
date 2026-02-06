@@ -13,5 +13,6 @@
   "command.disconnect.title": "断开代码空间连接",
   "command.delete.title": "删除代码空间",
   "command.create.title": "创建代码空间",
-  "command.openSshTerminal.title": "打开 SSH 终端"
+  "command.openSshTerminal.title": "打开 SSH 终端",
+  "command.addCodespaceScope.title": "添加代码空间作用域"
 }

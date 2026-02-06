@@ -13,5 +13,6 @@
   "command.disconnect.title": "Codespace から切断",
   "command.delete.title": "Codespace を削除",
   "command.create.title": "Codespace を作成",
-  "command.openSshTerminal.title": "SSH ターミナルを開く"
+  "command.openSshTerminal.title": "SSH ターミナルを開く",
+  "command.addCodespaceScope.title": "Codespace スコープを追加"
 }

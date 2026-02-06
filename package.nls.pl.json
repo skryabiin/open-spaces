@@ -13,5 +13,6 @@
   "command.disconnect.title": "Rozłącz z Codespace",
   "command.delete.title": "Usuń Codespace",
   "command.create.title": "Utwórz Codespace",
-  "command.openSshTerminal.title": "Otwórz Terminal SSH"
+  "command.openSshTerminal.title": "Otwórz Terminal SSH",
+  "command.addCodespaceScope.title": "Dodaj Zakres Codespace"
 }
